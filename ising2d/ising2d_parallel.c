@@ -26,8 +26,9 @@ int main(int argc, char **argv){
 	const double J = 1.0; //Coupling constant
 	const double k = pow(1.38064852, -23); //Boltzmann constant
 
-	int r1 = 100;
-	int r2 = 500;
+	double r1 = 100;
+	int r2 = 100;
+	int r3 = 100;
 
 	//Seed prng and inititate grid
 	int seed = 1997;
@@ -72,33 +73,37 @@ int main(int argc, char **argv){
 			g[i][j]=i*n+j;
 		}
 	}*/
-	double *magnetisations, *energies, *temps;
+	double *magnetisations, *energies, *specs, *sus, *temps;
 	if(rank==0){
 		magnetisations = (double *)malloc(r1*sizeof(double));
 		energies = (double *)malloc(r1*sizeof(double));
 		temps = (double *)malloc(r1*sizeof(double));
 	}
-	for(int j=0; j<r1; j++){
-		for(int i=0; i<r2; i++){
-			metropolis_sweep(g,s,e,J,T,k);
-			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-		}
+	for(int k=0; k<r1; k++){
+		T=0;
+		for(int j=0; j<r2; j++){
+			for(int i=0; i<r3; i++){
+				metropolis_sweep(g,s,e,J,T,k);
+				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+			}
 
-		double mag, enrg;
-		double M = magnetisation(g,s,e);
-		double E = energy(g,J,s,e);
-		MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-		if(rank==0){
-			mag/=size;
-			enrg/=size;
-			//printf("%f %f %f\n", mag, enrg, T);
-			magnetisations[j]=mag;
-			energies[j]=enrg;
-			temps[j] = T;
+			double mag, enrg;
+			double M = magnetisation(g,s,e);
+			double E = energy(g,J,s,e);
+			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			if(rank==0){
+				mag/=size;
+				enrg/=size;
+				//printf("%f %f %f\n", mag, enrg, T);
+				magnetisations[j]+=mag/r1;
+				energies[j]+=enrg/r1;
+				if(k==0) temps[j] = T;
+			}
+			T+=0.05;
+			//Reset grid to original arrangement
+			reset_grid(G,g);
 		}
-		T+=0.1;
-		reset_grid(G,g);
 	}
 	if(rank==0){
 		write_stats(magnetisations, energies, temps, r1);
@@ -128,7 +133,7 @@ void metropolis_sweep(int g[m][n], int s, int e, const double J, double T, const
 	for(i=s; i<=e; i++){
 		for(j=0; j<n; j++){
 			//Calculate the energy difference and check if spin has to be flipped
-			double dE = J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
+			double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
 			if(dE<0) g[i][j]*=-1;
 			else{
 				double r = drand48();
@@ -188,7 +193,7 @@ double energy(int g[m][n], const double J, int s, int e){
 			E+=-J*g[i][j]*(g[(i+1)%m][j]+g[(i-1)&m][j]+g[i][(j+1)%n]+g[i][(j-1)%n]);
 		}
 	}
-return E;
+return E/(2.0*m*n);
 }
 
 //Calculate magnetisation persite
@@ -200,7 +205,7 @@ double magnetisation(int g[m][n], int s, int e){
 			M+=g[i][j];
 		}
 	}
-return M/((e-s+1)*n);
+return fabs(M/((e-s+1)*n));
 }
 
 void print_matrix(int g[m][n]){
