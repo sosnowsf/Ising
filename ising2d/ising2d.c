@@ -8,9 +8,12 @@
 
 void init_grid(int g[m][n]);
 void metropolis_sweep(int g[m][n], const double , double, const double);
+void metropolis_sweep_triangular(int g[m][n], const double , double, const double);
 double energy(int g[m][n], const double);
+double energy_triangular(int g[m][n], const double);
 double magnetisation(int g[m][n]);
 double specific_heat(int g[m][n], const double, double);
+double specific_heat_triangular(int g[m][n], const double, double);
 double susceptibility(int g[m][n], double);
 void print_matrix(int g[m][n]);
 void write_stats(double *, double *, double *, double *, double *, int);
@@ -48,10 +51,10 @@ int main(){
 		double E=0.0;
 		for(int j=0; j<r2; j++){
 			for(int i=0; i<r3; i++){
-				metropolis_sweep(g,J,T,k);
+				metropolis_sweep_triangular(g,J,T,k);
 			}
 			double m1 = magnetisation(g)/r1;
-			double e1 = energy(g,J)/r1;
+			double e1 = energy_triangular(g,J)/r1;
 			mag[j] += m1;//magnetisation(g)/r1;
 			enrgy[j] += e1;//energy(g,J)/r1;
 			M += m1*m1;//(magnetisation(g)/r1)*(magnetisation(g)/r1);
@@ -108,6 +111,25 @@ void metropolis_sweep(int g[m][n], const double J, double T, const double k){
 	}
 }
 
+//Sweep for triangular lattice
+void metropolis_sweep_triangular(int g[m][n], const double J, double T, const double k){
+        int i,j;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+                        //Calculate the energy difference and check if spin has to be flipped
+                        double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                        //double dE = J*g[i][j]*(g[(i+1)%m][j]+g[(i-1)&m][j]+g[i][(j+1)%n]+g[i][(j-1)%n]);
+                        if(dE<0) g[i][j] *= -1;
+                        else{
+                                if(drand48()<(exp(-dE/T))){
+                                        //printf("%f %f %f\n", dE, T, exp(-dE/T));
+                                        g[i][j] *= -1;
+                                }
+                        }
+                }
+        }
+}
+
 //Calculate the energy per site of the system
 double energy(int g[m][n], const double J){
 	int i,j;
@@ -119,6 +141,19 @@ double energy(int g[m][n], const double J){
 	}
 return E/(2.0*m*n);
 }
+
+//Calculate the energy per site of the system
+double energy_triangular(int g[m][n], const double J){
+        int i,j;
+        double E=0;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                }
+        }
+return E/(2.0*m*n);
+}
+
 
 //Calculate magnetisation persite
 double magnetisation(int g[m][n]){
@@ -148,6 +183,24 @@ double specific_heat(int g[m][n], const double J, double T){
 	E2/=(2.0*m*n);
 	return (E2-(E1*E1));//*T*T;
 }
+
+double specific_heat_triangular(int g[m][n], const double J, double T){
+        int i,j;
+        double E;
+        double E1=0;
+        double E2=0;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+                        E=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[i+1][j+((int)pow(-1,i))] + g[i-1][j+((int)pow(-1,i))]);
+                        E1+=E;
+                        E2+=E*E;
+                }
+        }
+        E1/=(2.0*m*n);
+        E2/=(2.0*m*n);
+        return (E2-(E1*E1));//*T*T;
+}
+
 
 double susceptibility(int g[m][n], double T){
 	int i,j;
