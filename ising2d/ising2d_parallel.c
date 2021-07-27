@@ -10,21 +10,23 @@
 
 void init_grid(int g[m][n]);
 void metropolis_sweep(int g[m][n], int, int, const double , double, const double);
+void metropolis_sweep_triangular(int g[m][n], int, int, const double , double, const double);
 double energy(int g[m][n], const double, int, int);
+double energy_triangular(int g[m][n], const double, int, int);
 double magnetisation(int g[m][n], int, int);
 void print_matrix(int g[m][n]);
 void exchange(int g[m][n], int, int, int, int, MPI_Comm comm);
 //void gather(int g[m][n], int, int, int, int);
 void print_in_order(int g[m][n], MPI_Comm comm);
 int modulo(int, int);
-void write_stats(double *, double *, double *, int);
+void write_stats(double *, double *, double *, double *, double *, int);
 void reset_grid(int G[m][n], int g[m][n]);
 
 int main(int argc, char **argv){
 	int rank, size, s, e, nbrtop, nbrbot;
 	double T = 0; //Start at 0 degrees Celsius
 	const double J = 1.0; //Coupling constant
-	const double k = pow(1.38064852, -23); //Boltzmann constant
+	//const double k = pow(1.38064852, -23); //Boltzmann constant
 
 	double r1 = 100;
 	int r2 = 100;
@@ -75,21 +77,25 @@ int main(int argc, char **argv){
 	}*/
 	double *magnetisations, *energies, *specs, *sus, *temps;
 	if(rank==0){
-		magnetisations = (double *)malloc(r1*sizeof(double));
-		energies = (double *)malloc(r1*sizeof(double));
-		temps = (double *)malloc(r1*sizeof(double));
+		magnetisations = (double *)malloc(r2*sizeof(double));
+		energies = (double *)malloc(r2*sizeof(double));
+		temps = (double *)malloc(r2*sizeof(double));
+		specs = malloc(r2*sizeof(double));
+		sus = malloc(r2*sizeof(double));
 	}
 	for(int k=0; k<r1; k++){
 		T=0;
+		//double m1 = 0.0;
+		//double e1 = 0.0;
 		for(int j=0; j<r2; j++){
 			for(int i=0; i<r3; i++){
-				metropolis_sweep(g,s,e,J,T,k);
+				metropolis_sweep_triangular(g,s,e,J,T,k);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 			}
 
 			double mag, enrg;
 			double M = magnetisation(g,s,e);
-			double E = energy(g,J,s,e);
+			double E = energy_triangular(g,J,s,e);
 			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			if(rank==0){
@@ -98,6 +104,8 @@ int main(int argc, char **argv){
 				//printf("%f %f %f\n", mag, enrg, T);
 				magnetisations[j]+=mag/r1;
 				energies[j]+=enrg/r1;
+				specs[j] += ((enrg/r1)*(enrg/r1) - (energies[j])*(energies[j]))*(T*T)/r1;
+				sus[j] += ((mag/r1)*(mag/r1) - (magnetisations[j])*(magnetisations[j]))*T/r1;
 				if(k==0) temps[j] = T;
 			}
 			T+=0.05;
@@ -106,7 +114,7 @@ int main(int argc, char **argv){
 		}
 	}
 	if(rank==0){
-		write_stats(magnetisations, energies, temps, r1);
+		write_stats(magnetisations, energies, specs, sus, temps, r1);
 	}
 	//printf("%f %f\n", magnetisation(g,s,e), energy(g,J,s,e));
 	MPI_Finalize();
@@ -156,6 +164,24 @@ void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
 	MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
 }
 
+void metropolis_sweep_triangular(int g[m][n], int s, int e, const double J, double T, const double k){
+        int i,j;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        //Calculate the energy difference and check if spin has to be flipped
+                        double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]  + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                        if(dE<0) g[i][j]*=-1;
+                        else{
+                                double r = drand48();
+                                if(r<exp(-(1.0/T)*dE)){
+                                        g[i][j]*=-1;
+                                }
+                        }
+                }
+        }
+}
+
+
 /*void gather(int g[m][n], int s, int e, int rank, int size){
 	int *recvptr = &(g[0][0]);
 	int recvcounts[size];
@@ -190,11 +216,23 @@ double energy(int g[m][n], const double J, int s, int e){
 	double E=0;
 	for(i=s; i<=e; i++){
 		for(j=0; j<n; j++){
-			E+=-J*g[i][j]*(g[(i+1)%m][j]+g[(i-1)&m][j]+g[i][(j+1)%n]+g[i][(j-1)%n]);
+			E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
 		}
 	}
-return E/(2.0*m*n);
+return E/(2.0*(e-s+1)*n);
 }
+
+double energy_triangular(int g[m][n], const double J, int s, int e){
+        int i,j;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*n);
+}
+
 
 //Calculate magnetisation persite
 double magnetisation(int g[m][n], int s, int e){
@@ -249,10 +287,10 @@ int modulo(int a, int b){
 return r;
 }
 
-void write_stats(double *mag, double *energy, double *T, int r1){
+void write_stats(double *mag, double *energy, double *specs, double *sus, double *T, int r1){
 	FILE *fp = fopen("stats.txt", "w");
 	for(int i=0; i<r1; i++){
-		fprintf(fp,"%f %f %f\n", T[i], mag[i], energy[i]);
+		fprintf(fp,"%f %f %f %f %f\n", T[i], mag[i], energy[i], sus[i], specs[i]);
 	}
 	fclose(fp);
 }
