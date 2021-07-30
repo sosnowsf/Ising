@@ -1,60 +1,144 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
-//#include<mpi.h>
+#include<unistd.h>
+#include<gsl/gsl_rng.h>
+#include<gsl/gsl_randist.h>
 
 #define m 50
 #define n 50
 
-void init_grid(int g[m][n]);
-void metropolis_sweep(int g[m][n], const double , double, const double);
+void init_grid(int g[m][n], gsl_rng *);
+void metropolis_sweep(int g[m][n], const double , double, const double, gsl_rng *);
 void metropolis_sweep_triangular(int g[m][n], const double , double, const double);
+void metropolis_sweep_hexagonal(int g[m][n], const double , double, const double);
 double energy(int g[m][n], const double);
 double energy_triangular(int g[m][n], const double);
+double energy_hexagonal(int g[m][n], const double);
 double magnetisation(int g[m][n]);
 double specific_heat(int g[m][n], const double, double);
 double specific_heat_triangular(int g[m][n], const double, double);
 double susceptibility(int g[m][n], double);
 void print_matrix(int g[m][n]);
-void write_stats(double *, double *, double *, double *, double *, int);
+void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[m][n], int g[m][n]);
 int modulo(int, int);
 
-int main(){
-	double T = 0.0; //Start at 0 degrees Celsius
-	const double J = 1.0; //Coupling constant
-	const double k = pow(1.38064852, -23); //Boltzmann constant
-	
-	double r1 = 100;
-	int r2 = 100;
-	int r3 = 100;
+int main(int argc, char *argv[]){
 
-	int seed = 1997;
-	srand48(seed);
+	//Parse variables
+	int sq=0;
+	int triangle=0;
+	int hex=0;
+	int opt;
+	while((opt = getopt(argc, argv, "sth")) != -1){
+		switch(opt){
+			case 's':
+				sq = 1;
+				break;
+			case 't':
+				triangle = 1;
+				break;
+			case 'h':
+				hex = 1;
+				break;
+		}
+	}
+
+	double T;
+	const double J = 1.0; //Coupling constant
+	//const double k = pow(1.38064852, -23); //Boltzmann constant
+	
+	double r1 = 100; //Number of times simulation is ran to ge the average
+	int r2 = 50; //Number of temperatures
+	int r3 = 100; //Number of sweeps
+
+	//int seed = 1997;
+	//srand48(seed);
 	int g[m][n]; //define grid
 	
-	init_grid(g);
+	/*Set up rng*/
+	gsl_rng *gsl_mt = gsl_rng_alloc(gsl_rng_mt19937);
+	unsigned long seed = 1999;
+	gsl_rng_set(gsl_mt, seed);
+
+	init_grid(g, gsl_mt);
+
+	//printf("%f %f\n", gsl_ran_gaussian(gsl_mt,1), gsl_ran_gaussian(gsl_mt,1));
 
 	//print_matrix(g);
-	printf("%f\n", magnetisation(g));
+	//printf("%f\n", magnetisation(g));
 
 	double *mag, *enrgy, *spec, *sus, *temp;
-	mag = malloc(100*sizeof(double));
-	enrgy = malloc(100*sizeof(double));
-	temp = malloc(100*sizeof(double));
-	spec = malloc(100*sizeof(double));
-	sus = malloc(100*sizeof(double));	
+	mag = malloc(r2*sizeof(double));
+	enrgy = malloc(r2*sizeof(double));
+	temp = malloc(r2*sizeof(double));
+	spec = malloc(r2*sizeof(double));
+	sus = malloc(r2*sizeof(double));	
 
+        if(triangle==1){
+        for(int k=0; k<r1; k++){
+                T=0.0001;
+                double M=0.0;
+                double E=0.0;
+                for(int j=0; j<r2; j++){
+                        for(int i=0; i<r3; i++){
+                                metropolis_sweep_triangular(g,J,T,k);
+                        }
+                        double m1 = magnetisation(g)/r1;
+                        double e1 = energy_triangular(g,J)/r1;
+                        mag[j] += m1;//magnetisation(g)/r1;
+                        enrgy[j] += e1;//energy(g,J)/r1;
+                        M += m1*m1;//(magnetisation(g)/r1)*(magnetisation(g)/r1);
+                        E += e1*e1;//(energy(g,J)/r1)*(energy(g,J)/r1);
+                        spec[j] += (E-enrgy[j]*enrgy[j])*(T*T)/r1;//specific_heat(g,J,T)/r1;
+                        sus[j] += (M-mag[j]*mag[j])*T/r1;//susceptibility(g,T)/r1;
+                        if(k==0) temp[j] = T;
+                        T+=0.1;
+                        //print_matrix(g);
+                        init_grid(g,gsl_mt);
+                }
+        }
+        }
+
+
+        if(hex==1){
+        for(int k=0; k<r1; k++){
+                T=0.0001;
+                double M=0.0;
+                double E=0.0;
+                for(int j=0; j<r2; j++){
+                        for(int i=0; i<r3; i++){
+                                metropolis_sweep_hexagonal(g,J,T,k);
+                        }
+                        double m1 = magnetisation(g)/r1;
+                        double e1 = energy_hexagonal(g,J)/r1;
+                        mag[j] += m1;//magnetisation(g)/r1;
+                        enrgy[j] += e1;//energy(g,J)/r1;
+                        M += m1*m1;//(magnetisation(g)/r1)*(magnetisation(g)/r1);
+                        E += e1*e1;//(energy(g,J)/r1)*(energy(g,J)/r1);
+                        spec[j] += (E-enrgy[j]*enrgy[j])*(T*T)/r1;//specific_heat(g,J,T)/r1;
+                        sus[j] += (M-mag[j]*mag[j])*T/r1;//susceptibility(g,T)/r1;
+                        if(k==0) temp[j] = T;
+                        T+=0.1;
+                        //print_matrix(g);
+                        init_grid(g,gsl_mt);
+                }
+        }
+        }
+
+
+	if(sq==1){
 	for(int k=0; k<r1; k++){
-		T=0.0;
+		T=0.0001;
 		double M=0.0;
 		double E=0.0;
 		for(int j=0; j<r2; j++){
 			for(int i=0; i<r3; i++){
-				metropolis_sweep_triangular(g,J,T,k);
+				metropolis_sweep(g,J,T,k,gsl_mt);
 			}
 			double m1 = magnetisation(g)/r1;
-			double e1 = energy_triangular(g,J)/r1;
+			double e1 = energy(g,J)/r1;
 			mag[j] += m1;//magnetisation(g)/r1;
 			enrgy[j] += e1;//energy(g,J)/r1;
 			M += m1*m1;//(magnetisation(g)/r1)*(magnetisation(g)/r1);
@@ -62,27 +146,32 @@ int main(){
 			spec[j] += (E-enrgy[j]*enrgy[j])*(T*T)/r1;//specific_heat(g,J,T)/r1;
 			sus[j] += (M-mag[j]*mag[j])*T/r1;//susceptibility(g,T)/r1;
 			if(k==0) temp[j] = T;
-			T+=0.05;
+			T+=0.1;
 			//print_matrix(g);
-			init_grid(g);
+			init_grid(g,gsl_mt);
 		}
 	}
-	write_stats(mag,enrgy,spec,sus,temp,r1);
-	//printf("%f\n", magnetisation(g));
-	//g[3][5]=9;
-	//print_matrix(g);
+	}
+	//Save observables and free memory
+	char title[100];
+	if(hex==1) snprintf(title, 100, "stats_hexagonal_serial.txt");
+	if(triangle==1) snprintf(title, 100, "stats_triangular_serial.txt");
+	if(sq==1) snprintf(title, 100, "stats_square_serial.txt");
+	write_stats(title,mag,enrgy,spec,sus,temp,r2);
 	free(mag);
 	free(enrgy);
 	free(temp);
+	free(spec);
+	free(sus);
 return 0;
 }
 
 //Initialise grid for random start
-void init_grid(int g[m][n]){
+void init_grid(int g[m][n], gsl_rng *gsl_mt){
 	int i,j;
 	for(i=0; i<m; i++){
 		for(j=0; j<n; j++){
-			double U = drand48();
+			double U = gsl_rng_uniform(gsl_mt);//drand48();
 			if(U<0.5) g[i][j]=-1;
 			else{ 
 				g[i][j]=1;
@@ -93,7 +182,7 @@ void init_grid(int g[m][n]){
 }
 
 //Sweep through the lattice using the metropolis algorithm
-void metropolis_sweep(int g[m][n], const double J, double T, const double k){
+void metropolis_sweep(int g[m][n], const double J, double T, const double k, gsl_rng *gsl_mt){
 	int i,j;
 	for(i=0; i<m; i++){
 		for(j=0; j<n; j++){
@@ -102,7 +191,7 @@ void metropolis_sweep(int g[m][n], const double J, double T, const double k){
 			//double dE = J*g[i][j]*(g[(i+1)%m][j]+g[(i-1)&m][j]+g[i][(j+1)%n]+g[i][(j-1)%n]);
 			if(dE<0) g[i][j] *= -1;
 			else{
-				if(drand48()<(exp(-dE/T))){
+				if(/*drand48()*/gsl_rng_uniform(gsl_mt)<(exp(-dE/T))){
 					//printf("%f %f %f\n", dE, T, exp(-dE/T));
 					g[i][j] *= -1;
 				}
@@ -130,6 +219,26 @@ void metropolis_sweep_triangular(int g[m][n], const double J, double T, const do
         }
 }
 
+//Sweep for triangular lattice
+void metropolis_sweep_hexagonal(int g[m][n], const double J, double T, const double k){
+        int i,j;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+                        //Calculate the energy difference and check if spin has to be flipped
+                        //double dE = J*g[i][j]*(g[(i+1)%m][j]+g[(i-1)&m][j]+g[i][(j+1)%n]+g[i][(j-1)%n]);
+	 		double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                        if(dE<0) g[i][j] *= -1;
+                        else{
+                                if(drand48()<(exp(-dE/T))){
+                                        //printf("%f %f %f\n", dE, T, exp(-dE/T));
+                                        g[i][j] *= -1;
+                                }
+                        }
+                }
+        }
+}
+
+
 //Calculate the energy per site of the system
 double energy(int g[m][n], const double J){
 	int i,j;
@@ -149,6 +258,18 @@ double energy_triangular(int g[m][n], const double J){
         for(i=0; i<m; i++){
                 for(j=0; j<n; j++){
                         E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                }
+        }
+return E/(2.0*m*n);
+}
+
+//Calculate the energy per site of the system
+double energy_hexagonal(int g[m][n], const double J){
+        int i,j;
+        double E=0;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
                 }
         }
 return E/(2.0*m*n);
@@ -237,9 +358,10 @@ void reset_grid(int G[m][n], int g[m][n]){
 	}
 }
 
-void write_stats(double *mag, double *energy, double *sus, double *spec, double *T, int r1){
-	FILE *fp = fopen("stats_serial.txt", "w");
-	for(int i=0; i<r1; i++){
+void write_stats(char *title, double *mag, double *energy, double *sus, double *spec, double *T, int r2){
+	FILE *fp = fopen(title, "w");
+	//FILE *fp = fopen("stats_hexagonal_serial.txt", "w");
+	for(int i=0; i<r2; i++){
 		fprintf(fp,"%f %f %f %f %f\n", T[i], mag[i], energy[i], sus[i], spec[i]);
 	}
 	fclose(fp);
