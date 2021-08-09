@@ -31,9 +31,9 @@ int main(int argc, char **argv){
 	const double J = 1.0; //Coupling constant
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 
-	double r1 = 1000; //Number of simulations
+	double r1 = 1; //Number of simulations
 	int r2 = 50; //Number of temperatures
-	int r3 = 100; //Number of sweeps
+	int r3 = 1000; //Number of sweeps
 
 	//Seed prng and inititate grid
 	int seed = 1997;
@@ -62,6 +62,15 @@ int main(int argc, char **argv){
                                 hex = 1;
                                 break;
                 }
+        }
+	//Error checking
+        if((sq+triangle+hex)==0){
+                perror("No parse command given, please provide -s for a square lattice, -t for a triangular lattice or -h for a hexagonal lattice");
+                _exit(EXIT_FAILURE);
+        }
+        if((sq+triangle+hex)>1){
+                perror("Please provide only one parse command at a time");
+                _exit(EXIT_FAILURE);
         }
 
 	//Variables for MPI Cart
@@ -110,16 +119,16 @@ int main(int argc, char **argv){
 		T=0.0001; //reset the temperature for each simulation
 		for(int j=0; j<r2; j++){
 			for(int i=0; i<2*r3; i++){
-				//metropolis_sweep_triangular(g,s,e,J,T,k);
-				//exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+				metropolis_sweep(g,s,e,J,T,k);
+				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 				/*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 				MPI_Barrier(MPI_COMM_WORLD);
 				if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 				MPI_Barrier(MPI_COMM_WORLD);*/
-				if(rank%2==i%2) metropolis_sweep(g,s,e,J,T,k);
-				exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
+				//if(rank%2==i%2) metropolis_sweep(g,s,e,J,T,k);
+				//exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
 			}
 			//calculate the magnetisation per site for each process then get the average on the root process
 			double mag, enrg;
@@ -241,11 +250,12 @@ void init_grid(int g[m][n]){
 	int i,j;
 	for(i=0; i<m; i++){
 		for(j=0; j<n; j++){
-			double U = drand48();
+			/*double U = drand48();
 			if(U<0.5) g[i][j]=-1;
 			else{ 
 				g[i][j]=1;
-			}
+			}*/
+			g[i][j]=1;
 		}
 	}
 }

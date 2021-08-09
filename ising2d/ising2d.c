@@ -44,14 +44,22 @@ int main(int argc, char *argv[]){
 				break;
 		}
 	}
-
+	//Error checking
+	if((sq+triangle+hex)==0){
+		perror("No parse command given, please provide -s for a square lattice, -t for a triangular lattice or -h for a hexagonal lattice");
+		_exit(EXIT_FAILURE);
+	}
+	if((sq+triangle+hex)>1){
+		perror("Please provide only one parse command at a time");
+		_exit(EXIT_FAILURE);
+	}
 	double T;
 	const double J = 1.0; //Coupling constant
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	
-	double r1 = 100; //Number of times simulation is ran to ge the average
+	double r1 = 1; //Number of times simulation is ran to ge the average
 	int r2 = 50; //Number of temperatures
-	int r3 = 100; //Number of sweeps
+	int r3 = 1000; //Number of sweeps
 
 	//int seed = 1997;
 	//srand48(seed);
@@ -171,11 +179,12 @@ void init_grid(int g[m][n], gsl_rng *gsl_mt){
 	int i,j;
 	for(i=0; i<m; i++){
 		for(j=0; j<n; j++){
-			double U = gsl_rng_uniform(gsl_mt);//drand48();
+			g[i][j]=1;
+			/*double U = gsl_rng_uniform(gsl_mt);//drand48();
 			if(U<0.5) g[i][j]=-1;
 			else{ 
 				g[i][j]=1;
-			}
+			}*/
 		}
 	}
 	//print_matrix(g);
@@ -184,21 +193,30 @@ void init_grid(int g[m][n], gsl_rng *gsl_mt){
 //Sweep through the lattice using the metropolis algorithm
 void metropolis_sweep(int g[m][n], const double J, double T, const double k, gsl_rng *gsl_mt){
 	int i,j;
-	for(i=0; i<m; i++){
+	double dE;
+	for(int k=0; k<m*n; k++){
+		i=gsl_rng_uniform_int(gsl_mt, m);
+		j=gsl_rng_uniform_int(gsl_mt, n);
+		dE = 2.0*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
+		if(dE<0) g[i][j] *=-1;
+		else{ if(gsl_rng_uniform(gsl_mt)<(exp(-dE/T))) g[i][j] *=-1; }
+	}
+}
+	/*for(i=0; i<m; i++){
 		for(j=0; j<n; j++){
 			//Calculate the energy difference and check if spin has to be flipped
-			double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
+			double dE = 2.0*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
 			//double dE = J*g[i][j]*(g[(i+1)%m][j]+g[(i-1)&m][j]+g[i][(j+1)%n]+g[i][(j-1)%n]);
 			if(dE<0) g[i][j] *= -1;
 			else{
-				if(/*drand48()*/gsl_rng_uniform(gsl_mt)<(exp(-dE/T))){
+				if(gsl_rng_uniform(gsl_mt)<(exp(-dE/T))){
 					//printf("%f %f %f\n", dE, T, exp(-dE/T));
 					g[i][j] *= -1;
 				}
 			}
 		}
 	}
-}
+}*/
 
 //Sweep for triangular lattice
 void metropolis_sweep_triangular(int g[m][n], const double J, double T, const double k){
@@ -285,7 +303,7 @@ double magnetisation(int g[m][n]){
 			M+=g[i][j];
 		}
 	}
-return fabs(M)/(m*n);
+return fabs(M/(m*n));
 }
 
 double specific_heat(int g[m][n], const double J, double T){
