@@ -11,9 +11,9 @@
 #define n 50
 
 void init_grid(int g[m][n], int s, gsl_rng *);
-void metropolis_sweep(int g[m][n], int, int, const double , double, gsl_rng *);
-void metropolis_sweep_triangular(int g[m][n], int, int, const double , double, gsl_rng *);
-void metropolis_sweep_hexagonal(int g[m][n], int, int, const double , double, gsl_rng *);
+void metropolis_sweep(int g[m][n], int, int, int, const double , double, gsl_rng *);
+void metropolis_sweep_triangular(int g[m][n], int, int, int, const double , double, gsl_rng *);
+void metropolis_sweep_hexagonal(int g[m][n], int, int, int, const double , double, gsl_rng *);
 double energy(int g[m][n], const double, int, int);
 double energy_triangular(int g[m][n], const double, int, int);
 double energy_hexagonal(int g[m][n], const double, int, int);
@@ -26,6 +26,8 @@ void print_in_order(int g[m][n], MPI_Comm comm);
 int modulo(int, int);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[m][n], int g[m][n]);
+int delta(int, int);
+int H(int, int);
 
 int main(int argc, char **argv){
 	int rank, size, s, e, nbrtop, nbrbot;
@@ -34,9 +36,9 @@ int main(int argc, char **argv){
 	const double J = 1.0; //Coupling constant
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 
-	double r1 = 1; //Number of simulations
+	double r1 = 10.0; //Number of simulations
 	int r2 = 50; //Number of temperatures
-	int r3 = 1000; //Number of sweeps
+	int r3 = 100; //Number of sweeps
 
 	//Seed prng and inititate grid
 	gsl_rng *gsl_mt = gsl_rng_alloc(gsl_rng_mt19937);
@@ -46,9 +48,9 @@ int main(int argc, char **argv){
 	//srand48(seed);
 
 	int g[m][n]; //define grid
-	int G[m][n];
-	init_grid(G, gsl_mt);
-	reset_grid(G,g);
+	//int G[m][n];
+	init_grid(g, spin, gsl_mt);
+	//reset_grid(G,g);
 
 
         //Parse variables
@@ -125,7 +127,7 @@ int main(int argc, char **argv){
 		T=0.0001; //reset the temperature for each simulation
 		for(int j=0; j<r2; j++){
 			for(int i=0; i<2*r3; i++){
-				metropolis_sweep(g,s,e,J,T,k);
+				metropolis_sweep(g,spin,s,e,J,T,gsl_mt);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 				/*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
@@ -154,7 +156,9 @@ int main(int argc, char **argv){
 			}
 			T+=0.1;
 			//Reset grid to original arrangement
-			reset_grid(G,g);
+			//reset_grid(G,g);
+			init_grid(g,spin,gsl_mt);
+			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 		}
 	}
 	}
@@ -163,16 +167,16 @@ int main(int argc, char **argv){
                 T=0.0001; //reset the temperature for each simulation
                 for(int j=0; j<r2; j++){
                         for(int i=0; i<2*r3; i++){
-                                //metropolis_sweep_triangular(g,s,e,J,T,k);
-                                //exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+                                metropolis_sweep_triangular(g,spin,s,e,J,T,gsl_mt);
+                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 MPI_Barrier(MPI_COMM_WORLD);
                                 if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 MPI_Barrier(MPI_COMM_WORLD);*/
-                                if(rank%2==i%2) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
+                                //if(rank%2==i%2) metropolis_sweep_triangular(g,s,e,J,T,k);
+                                //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
                         //calculate the magnetisation per site for each process then get the average on the root process
                         double mag, enrg;
@@ -192,7 +196,9 @@ int main(int argc, char **argv){
                         }
                         T+=0.1;
                         //Reset grid to original arrangement
-                        reset_grid(G,g);
+                        //reset_grid(G,g);
+                        init_grid(g,spin,gsl_mt);
+			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                 }
         }
 	}
@@ -201,16 +207,16 @@ int main(int argc, char **argv){
                 T=0.0001; //reset the temperature for each simulation
                 for(int j=0; j<r2; j++){
                         for(int i=0; i<2*r3; i++){
-                                //metropolis_sweep_triangular(g,s,e,J,T,k);
-                                //exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+                                metropolis_sweep_triangular(g,spin,s,e,J,T,gsl_mt);
+                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 MPI_Barrier(MPI_COMM_WORLD);
                                 if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 MPI_Barrier(MPI_COMM_WORLD);*/
-                                if(rank%2==i%2) metropolis_sweep_hexagonal(g,s,e,J,T,k);
-                                exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
+                                //if(rank%2==i%2) metropolis_sweep_hexagonal(g,s,e,J,T,k);
+                                //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
                         //calculate the magnetisation per site for each process then get the average on the root process
                         double mag, enrg;
@@ -230,16 +236,18 @@ int main(int argc, char **argv){
                         }
                         T+=0.1;
                         //Reset grid to original arrangement
-                        reset_grid(G,g);
+                        //reset_grid(G,g);
+                        init_grid(g,spin,gsl_mt);
+			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                 }
         }
 	}
 	//Save observables and free memory
 	if(rank==0){
 		char title[100];
-        	if(hex==1) snprintf(title, 100, "stats_hexagonal_parallel.txt");
-        	if(triangle==1) snprintf(title, 100, "stats_triangular_parallel.txt");
-        	if(sq==1) snprintf(title, 100, "stats_square_parallel.txt");
+        	if(hex==1) snprintf(title, 100, "potts2d_stats_hexagonal_parallel.txt");
+        	if(triangle==1) snprintf(title, 100, "potts2d_stats_triangular_parallel.txt");
+        	if(sq==1) snprintf(title, 100, "potts2d_stats_square_parallel.txt");
 		write_stats(title, magnetisations, energies, specs, sus, temps, r2);
 		free(magnetisations);
 		free(energies);
@@ -252,7 +260,7 @@ return 0;
 }
 
 //Initialise grid for random start
-void init_grid(int g[m][n]){
+void init_grid(int g[m][n], int s, gsl_rng *gsl_mt){
 	int i,j;
 	for(i=0; i<m; i++){
 		for(j=0; j<n; j++){
@@ -261,24 +269,23 @@ void init_grid(int g[m][n]){
 			else{ 
 				g[i][j]=1;
 			}*/
-			g[i][j]=1;
+			g[i][j]=s;
 		}
 	}
 }
 
 //Sweep through the lattice using the metropolis algorithm
-void metropolis_sweep(int g[m][n], int s, int e, const double J, double T, const double k){
-	int i,j;
+void metropolis_sweep(int g[m][n], int spin, int s, int e, const double J, double T, gsl_rng *gsl_mt){
+	int i,j,r;
+	double dE;
 	for(i=s; i<=e; i++){
 		for(j=0; j<n; j++){
 			//Calculate the energy difference and check if spin has to be flipped
-			double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
-			if(dE<0) g[i][j]*=-1;
+			r=gsl_rng_uniform_int(gsl_mt,spin)+1;
+			dE = 2.0*J*(H(r,g[modulo(i+1,m)][j]) + H(r,g[modulo(i-1,m)][j]) + H(r,g[i][modulo(j-1,n)]) + H(r,g[i][modulo(j+1,n)]));
+			if(dE<=0) g[i][j]=r;
 			else{
-				double r = drand48();
-				if(r<exp(-(1.0/T)*dE)){
-					g[i][j]*=-1;
-				}
+				if(gsl_rng_uniform(gsl_mt)<exp(-dE/T)) g[i][j]=r;
 			}
 		}
 	}
@@ -326,35 +333,33 @@ void exchange2(int g[m][n], int s, int e, int nbrtop, int nbrbot, int rank, int 
         }
 }
 
-void metropolis_sweep_triangular(int g[m][n], int s, int e, const double J, double T, const double k){
-        int i,j;
+void metropolis_sweep_triangular(int g[m][n], int spin, int s, int e, const double J, double T, gsl_rng *gsl_mt){
+        int i,j,r;
+	double dE;
         for(i=s; i<=e; i++){
                 for(j=0; j<n; j++){
                         //Calculate the energy difference and check if spin has to be flipped
-                        double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]  + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
-                        if(dE<0) g[i][j]*=-1;
+                        r=gsl_rng_uniform_int(gsl_mt,spin)+1;
+			dE = 2.0*J*(H(r,g[modulo(i+1,m)][j]) + H(r,g[modulo(i-1,m)][j]) + H(r, g[i][modulo(j+1,n)]) + H(r,g[i][modulo(j-1,n)]) + H(r,g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(r,g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]));
+                        if(dE<=0) g[i][j]=r;
                         else{
-                                double r = drand48();
-                                if(r<exp(-(1.0/T)*dE)){
-                                        g[i][j]*=-1;
-                                }
+                                if(gsl_rng_uniform(gsl_mt)<exp(-dE/T)) g[i][j]=r;
                         }
                 }
         }
 }
 
-void metropolis_sweep_hexagonal(int g[m][n], int s, int e, const double J, double T, const double k){
-        int i,j;
+void metropolis_sweep_hexagonal(int g[m][n], int spin, int s, int e, const double J, double T, gsl_rng *gsl_mt){
+        int i,j,r;
+	double dE;
         for(i=s; i<=e; i++){
                 for(j=0; j<n; j++){
                         //Calculate the energy difference and check if spin has to be flipped
-                        double dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
-                        if(dE<0) g[i][j]*=-1;
+                        r=gsl_rng_uniform_int(gsl_mt,s)+1;
+			dE = 2*J*(H(r,g[modulo(i+1,m)][j]) + H(r,g[modulo(i-1,m)][j]) + H(r,g[i][modulo(j+((int)pow(-1,i+j)),n)]));
+                        if(dE<=0) g[i][j]=r;
                         else{
-                                double r = drand48();
-                                if(r<exp(-(1.0/T)*dE)){
-                                        g[i][j]*=-1;
-                                }
+                                if(gsl_rng_uniform(gsl_mt)<exp(-dE/T)) g[i][j]=r;
                         }
                 }
         }
@@ -395,7 +400,8 @@ double energy(int g[m][n], const double J, int s, int e){
 	double E=0;
 	for(i=s; i<=e; i++){
 		for(j=0; j<n; j++){
-			E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
+			E += -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]));
+			//E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
 		}
 	}
 return E/(2.0*(e-s+1)*n);
@@ -406,7 +412,8 @@ double energy_triangular(int g[m][n], const double J, int s, int e){
         double E=0;
         for(i=s; i<=e; i++){
                 for(j=0; j<n; j++){
-                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+			E+=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]) + H(g[i][j],g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(g[i][j],g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]));
+                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
                 }
         }
 return E/(2.0*(e-s+1)*n);
@@ -417,7 +424,8 @@ double energy_hexagonal(int g[m][n], const double J, int s, int e){
         double E=0;
         for(i=s; i<=e; i++){
                 for(j=0; j<n; j++){
-                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+			E+=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+((int)pow(-1,i+j)),n)]));
+                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
                 }
         }
 return E/(2.0*(e-s+1)*n);
@@ -494,3 +502,11 @@ void reset_grid(int G[m][n], int g[m][n]){
 	}
 }
 
+int delta(int a, int b){
+if(a==b) return 1;
+else{ return 0;}
+}
+
+int H(int a, int b){
+return 1-delta(a,b);
+}
