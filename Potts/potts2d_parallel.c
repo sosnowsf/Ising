@@ -10,14 +10,18 @@
 #define m 50
 #define n 50
 
-void init_grid(int g[m][n], int s, gsl_rng *);
+void init_grid(int g[m][n], int, int, gsl_rng *);
 void metropolis_sweep(int g[m][n], int, int, int, const double , double, gsl_rng *);
 void metropolis_sweep_triangular(int g[m][n], int, int, int, const double , double, gsl_rng *);
 void metropolis_sweep_hexagonal(int g[m][n], int, int, int, const double , double, gsl_rng *);
 double energy(int g[m][n], const double, int, int);
+double energy2(int g[m][n], const double, int, int);
 double energy_triangular(int g[m][n], const double, int, int);
+double energy_triangular2(int g[m][n], const double, int, int);
 double energy_hexagonal(int g[m][n], const double, int, int);
+double energy_hexagonal2(int g[m][n], const double, int, int);
 double magnetisation(int g[m][n], int, int);
+double magnetisation2(int g[m][n], int, int);
 void print_matrix(int g[m][n]);
 void exchange(int g[m][n], int, int, int, int, MPI_Comm);
 void exchange2(int g[m][n], int, int, int, int, int, int, MPI_Comm);
@@ -34,11 +38,12 @@ int main(int argc, char **argv){
 	int spin = 2;
 	double T = 0.0001; //Start at 0 degrees Celsius
 	const double J = 1.0; //Coupling constant
-	//const double k = pow(1.38064852, -23); //Boltzmann constant
+	int c=0;
 
+	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	double r1 = 10.0; //Number of simulations
 	int r2 = 50; //Number of temperatures
-	int r3 = 100; //Number of sweeps
+	int r3 = 1000; //Number of sweeps
 
 	//Seed prng and inititate grid
 	gsl_rng *gsl_mt = gsl_rng_alloc(gsl_rng_mt19937);
@@ -49,7 +54,7 @@ int main(int argc, char **argv){
 
 	int g[m][n]; //define grid
 	//int G[m][n];
-	init_grid(g, spin, gsl_mt);
+	init_grid(g, c, spin, gsl_mt);
 	//reset_grid(G,g);
 
 
@@ -58,22 +63,28 @@ int main(int argc, char **argv){
         int triangle=0;
         int hex=0;
         int opt;
-        while((opt = getopt(argc, argv, "sth")) != -1){
+        while((opt = getopt(argc, argv, "123hc")) != -1){
                 switch(opt){
-                        case 's':
+                        case '1':
                                 sq = 1;
                                 break;
-                        case 't':
+                        case '2':
                                 triangle = 1;
                                 break;
-                        case 'h':
+                        case '3':
                                 hex = 1;
                                 break;
+			case 'h':
+				printf("Command lines:\n -1 for square grid\n -2 for triangular grid \n -3 for hexagonal grid\n");
+				return 0;
+			case 'c':
+				c=1;
+				break;
                 }
         }
 	//Error checking
         if((sq+triangle+hex)==0){
-                perror("No parse command given, please provide -s for a square lattice, -t for a triangular lattice or -h for a hexagonal lattice");
+                perror("No parse command given, use -h for help");
                 _exit(EXIT_FAILURE);
         }
         if((sq+triangle+hex)>1){
@@ -139,25 +150,31 @@ int main(int argc, char **argv){
 				//exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
 			}
 			//calculate the magnetisation per site for each process then get the average on the root process
-			double mag, enrg;
+			double mag, enrg, mag2, enrg2;
 			double M = magnetisation(g,s,e);
 			double E = energy(g,J,s,e);
+			double M2 = magnetisation(g,s,e);
+			double E2 = energy2(g,J,s,e);
 			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E2, &enrg2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			if(rank==0){
 				mag/=size;
 				enrg/=size;
+				mag2/=size;
+				enrg2/=size;
 				//printf("%f %f %f\n", mag, enrg, T);
 				magnetisations[j]+=mag/r1;
 				energies[j]+=enrg/r1;
-				specs[j] += ((enrg/r1)*(enrg/r1) - (energies[j])*(energies[j]))*(T*T)/r1;
-				sus[j] += ((mag/r1)*(mag/r1) - (magnetisations[j])*(magnetisations[j]))*T/r1;
+				specs[j] += fabs(enrg2 - (enrg/r1)*(enrg/r1))*(T*T)/r1;
+				sus[j] += fabs(mag2 - (mag/r1)*(mag/r1))*T/r1;
 				if(k==0) temps[j] = T;
 			}
 			T+=0.1;
 			//Reset grid to original arrangement
 			//reset_grid(G,g);
-			init_grid(g,spin,gsl_mt);
+			init_grid(g,c,spin,gsl_mt);
 			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 		}
 	}
@@ -179,25 +196,31 @@ int main(int argc, char **argv){
                                 //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
                         //calculate the magnetisation per site for each process then get the average on the root process
-                        double mag, enrg;
+                        double mag, enrg, mag2, enrg2;
                         double M = magnetisation(g,s,e);
                         double E = energy_triangular(g,J,s,e);
+			double M2 = magnetisation(g,s,e);
+			double E2 = energy2(g,J,s,e);
                         MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E2, &enrg2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         if(rank==0){
                                 mag/=size;
                                 enrg/=size;
+				mag2/=size;
+				enrg2/=size;
                                 //printf("%f %f %f\n", mag, enrg, T);
                                 magnetisations[j]+=mag/r1;
                                 energies[j]+=enrg/r1;
-                                specs[j] += ((enrg/r1)*(enrg/r1) - (energies[j])*(energies[j]))*(T*T)/r1;
-                                sus[j] += ((mag/r1)*(mag/r1) - (magnetisations[j])*(magnetisations[j]))*T/r1;
+                                specs[j] += fabs(enrg2 - (enrg/r1)*(enrg/r1))*(T*T)/r1;
+                                sus[j] += fabs(mag2 - (mag/r1)*(mag/r1))*T/r1;
                                 if(k==0) temps[j] = T;
                         }
                         T+=0.1;
                         //Reset grid to original arrangement
                         //reset_grid(G,g);
-                        init_grid(g,spin,gsl_mt);
+                        init_grid(g,c,spin,gsl_mt);
 			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                 }
         }
@@ -219,25 +242,31 @@ int main(int argc, char **argv){
                                 //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
                         //calculate the magnetisation per site for each process then get the average on the root process
-                        double mag, enrg;
+                        double mag, enrg, mag2, enrg2;
                         double M = magnetisation(g,s,e);
                         double E = energy_hexagonal(g,J,s,e);
+			double M2 = magnetisation(g,s,e);
+			double E2 = energy2(g,J,s,e);
                         MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E2, &enrg2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         if(rank==0){
                                 mag/=size;
                                 enrg/=size;
+				mag2/=size;
+				enrg2/=size;
                                 //printf("%f %f %f\n", mag, enrg, T);
                                 magnetisations[j]+=mag/r1;
                                 energies[j]+=enrg/r1;
-                                specs[j] += ((enrg/r1)*(enrg/r1) - (energies[j])*(energies[j]))*(T*T)/r1;
-                                sus[j] += ((mag/r1)*(mag/r1) - (magnetisations[j])*(magnetisations[j]))*T/r1;
+                                specs[j] += fabs(enrg2 - (enrg/r1)*(enrg/r1))*(T*T)/r1;
+                                sus[j] += fabs(mag2 - (mag/r1)*(mag/r1))*T/r1;
                                 if(k==0) temps[j] = T;
                         }
                         T+=0.1;
                         //Reset grid to original arrangement
                         //reset_grid(G,g);
-                        init_grid(g,spin,gsl_mt);
+                        init_grid(g,c,spin,gsl_mt);
 			exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                 }
         }
@@ -245,9 +274,13 @@ int main(int argc, char **argv){
 	//Save observables and free memory
 	if(rank==0){
 		char title[100];
-        	if(hex==1) snprintf(title, 100, "potts2d_stats_hexagonal_parallel.txt");
-        	if(triangle==1) snprintf(title, 100, "potts2d_stats_triangular_parallel.txt");
-        	if(sq==1) snprintf(title, 100, "potts2d_stats_square_parallel.txt");
+        	if(hex==1 && c==0) snprintf(title, 100, "potts2d_stats_hexagonal_parallel_hot.txt");
+        	if(triangle==1 && c==0) snprintf(title, 100, "potts2d_stats_triangular_parallel_hot.txt");
+        	if(sq==1 && c==0) snprintf(title, 100, "potts2d_stats_square_parallel_hot.txt");
+                if(hex==1 && c==1) snprintf(title, 100, "potts2d_stats_hexagonal_parallel_cold.txt");
+                if(triangle==1 && c==1) snprintf(title, 100, "potts2d_stats_triangular_parallel_cold.txt");
+                if(sq==1 && c==1) snprintf(title, 100, "potts2d_stats_square_parallel_cold.txt");
+
 		write_stats(title, magnetisations, energies, specs, sus, temps, r2);
 		free(magnetisations);
 		free(energies);
@@ -260,16 +293,25 @@ return 0;
 }
 
 //Initialise grid for random start
-void init_grid(int g[m][n], int s, gsl_rng *gsl_mt){
+void init_grid(int g[m][n], int c, int s, gsl_rng *gsl_mt){
 	int i,j;
-	for(i=0; i<m; i++){
-		for(j=0; j<n; j++){
-			/*double U = drand48();
-			if(U<0.5) g[i][j]=-1;
-			else{ 
-				g[i][j]=1;
-			}*/
-			g[i][j]=s;
+	if(c==1){
+		for(i=0; i<m; i++){
+			for(j=0; j<n; j++){
+				/*double U = drand48();
+				if(U<0.5) g[i][j]=-1;
+				else{ 
+					g[i][j]=1;
+				}*/
+				g[i][j]=s;
+			}
+		}
+	}
+	if(c==0){
+		for(i=0; i<m; i++){
+			for(j=0; j<n; j++){
+				g[i][j]=gsl_rng_uniform_int(gsl_mt,s)+1;
+			}
 		}
 	}
 }
@@ -407,6 +449,21 @@ double energy(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n);
 }
 
+double energy2(int g[m][n], const double J, int s, int e){
+        int i,j;
+	double dE;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        dE = -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]));
+			E+=dE*dE;
+                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*n*(e-s+1)*n);
+}
+
+
 double energy_triangular(int g[m][n], const double J, int s, int e){
         int i,j;
         double E=0;
@@ -419,6 +476,21 @@ double energy_triangular(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n);
 }
 
+double energy_triangular2(int g[m][n], const double J, int s, int e){
+        int i,j;
+	double dE;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        dE=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]) + H(g[i][j],g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(g[i][j],g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]));
+			E+=dE*dE;
+                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*n*(e-s+1)*n);
+}
+
+
 double energy_hexagonal(int g[m][n], const double J, int s, int e){
         int i,j;
         double E=0;
@@ -429,6 +501,20 @@ double energy_hexagonal(int g[m][n], const double J, int s, int e){
                 }
         }
 return E/(2.0*(e-s+1)*n);
+}
+
+double energy_hexagonal2(int g[m][n], const double J, int s, int e){
+        int i,j;
+	double dE;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        dE=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+((int)pow(-1,i+j)),n)]));
+			E+=dE*dE;
+                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*n*(e-s+1)*n);
 }
 
 
@@ -443,6 +529,18 @@ double magnetisation(int g[m][n], int s, int e){
 	}
 return fabs(M/((e-s+1)*n));
 }
+
+double magnetisation2(int g[m][n], int s, int e){
+        int i,j;
+        double M=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        M+=g[i][j]*g[i][j];
+                }
+        }
+return fabs(M/((e-s+1)*n*(e-s+1)*n));
+}
+
 
 void print_matrix(int g[m][n]){
 	int i,j;

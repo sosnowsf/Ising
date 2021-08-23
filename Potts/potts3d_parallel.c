@@ -11,10 +11,12 @@
 #define y 10
 #define z 10
 
-void init_grid(int g[x][y][z], int, gsl_rng *);
-void metropolis_sweep(int g[x][y][z], int, int, const double , double, gsl_rng *);
+void init_grid(int g[x][y][z], int, int, gsl_rng *);
+void metropolis_sweep(int g[x][y][z], int, int, int, const double , double, gsl_rng *);
 double energy(int g[z][y][z], const double, int, int);
+double energy2(int g[z][y][z], const double, int, int);
 double magnetisation(int g[x][y][z], int, int);
+double magnetisation2(int g[x][y][z], int, int);
 void exchange(int g[x][y][z], int, int, int, int, MPI_Comm comm);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 int modulo(int, int);
@@ -26,19 +28,33 @@ int main(int argc, char **argv){
 	int rank, size, s, e, nbrtop, nbrbot; //variables needed for parallelisation
 	double T; //Temperature
 	const double J = 1.0; //Coupling constant
+	int spin = 2;
 
 	int g[x][y][z];
 
-	double r1 = 1.0; //Number of simulations
-	int r2 = 100; //Number of temperatures
+	double r1 = 10.0; //Number of simulations
+	int r2 = 50; //Number of temperatures
 	int r3 = 1000; //Number of sweeps per simulation per temp
+        int c = 0;
+        int opt;
+        while((opt = getopt(argc, argv, "hc")) != -1){
+                switch(opt){
+                        case 'c':
+                                c=1;
+                                break;
+                        case 'h':
+                                printf("Use -c for cold start (hot start default)");
+                                break;
+                }
+        }
+
 
 	//Seed prng and initiate grid
 	gsl_rng *gsl_mt = gsl_rng_alloc(gsl_rng_mt19937);
 	unsigned long seed = 1999;
 	gsl_rng_set(gsl_mt, seed);
 
-	init_grid(g, gsl_mt);
+	init_grid(g, c, spin, gsl_mt);
 	//int seed = 1997;
 	//srand48(1997);
 
@@ -85,33 +101,40 @@ int main(int argc, char **argv){
 		T=0.0001;
 		for(int j=0; j<r2; j++){
 			for(int k=0; k<r3; k++){
-				metropolis_sweep(g,s,e,J,T,gsl_mt);
+				metropolis_sweep(g,spin,s,e,J,T,gsl_mt);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 			}
-			double M,E;
+			double M,E,M2,E2;
 			double M1 = magnetisation(g,s,e);
 			double E1 = energy(g,J,s,e);
+			double M22 = magnetisation2(g,s,e);
+			double E22 = energy2(g,J,s,e);
 			MPI_Reduce(&M1, &M, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E1, &E, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M22, &M2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E22, &E2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			if(rank==0){
 				M/=size;
 				E/=size;
+				M2/=size;
+				E2/=size;
 				//printf("%f %f %f\n", mag, enrg, T);
 				mag[j]+=M/r1;
 				eng[j]+=E/r1;
-				specs[j] += ((E/r1)*(E/r1) - (eng[j])*(eng[j]))*(T*T)/r1;
-				sus[j] += ((M/r1)*(M/r1) - (mag[j])*(mag[j]))*T/r1;
+				specs[j] += fabs(E2 - (E/r1)*(E/r1))*(T*T)/r1;
+				sus[j] += fabs(M2 - (M/r1)*(M/r1))*T/r1;
 				if(i==0) temps[j] = T;
 			}
-		T+=0.05;
+		T+=0.1;
 		}
-	init_grid(g,gsl_mt);
+	init_grid(g,c,spin,gsl_mt);
 	//exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 	}
 
 	if(rank==0){
 		char title[100];
-		snprintf(title, 100, "potts3d_stats_cube_parallel.txt");
+		if(c==0) snprintf(title, 100, "potts3d_stats_cube_parallel_hot.txt");
+		if(c==1) snprintf(title, 100, "potts3d_stats_cube_parallel_cold.txt");
 		write_stats(title,mag,eng,specs,sus,temps,r2);
 	}
 	MPI_Finalize();
@@ -119,16 +142,27 @@ return 0;
 }
 
 //Initiate grid for random start
-void init_grid(int g[x][y][z], int s, gsl_rng *gsl_mt){
+void init_grid(int g[x][y][z], int c, int s, gsl_rng *gsl_mt){
 	int i,j,k;
-	for(i=0;i<x;i++){
-		for(j=0;j<y;j++){
-			for(k=0;k<z;k++){
-				g[i][j][k]= s;//2*gsl_rng_uniform_int(gsl_mt, 2)-1;
-				/*if(drand48()<0.5) g[i][j][k] = -1;
-				else{
-					g[i][j][k] = 1;
-				}*/
+	if(c==1){
+		for(i=0;i<x;i++){
+			for(j=0;j<y;j++){
+				for(k=0;k<z;k++){
+					g[i][j][k] = s;//2*gsl_rng_uniform_int(gsl_mt, 2)-1;
+					/*if(drand48()<0.5) g[i][j][k] = -1;
+					else{
+						g[i][j][k] = 1;
+					}*/
+				}
+			}
+		}
+	}
+	if(c==0){
+		for(i=0; i<x; i++){
+			for(j=0; j<y; j++){
+				for(k=0; k<z; k++){
+					g[i][j][k] = gsl_rng_uniform_int(gsl_mt,s)+1;
+				}
 			}
 		}
 	}
@@ -164,6 +198,20 @@ double magnetisation(int g[x][y][z], int s, int e){
 return fabs(M/((e-s+1)*y*z));
 }
 
+double magnetisation2(int g[x][y][z], int s, int e){
+        int i,j,k;
+        double M=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<y; j++){
+                        for(k=0; k<z; k++){
+                                M+=g[i][j][k]*g[i][j][k];
+                        }
+                }
+        }
+return fabs(M/((e-s+1)*y*z));
+}
+
+
 double energy(int g[x][y][z], const double J, int s, int e){
 	int i,j,k;
 	double E=0;
@@ -176,6 +224,22 @@ double energy(int g[x][y][z], const double J, int s, int e){
 	}
 return E/(2.0*(e-s+1)*y*z);
 }
+
+double energy2(int g[x][y][z], const double J, int s, int e){
+        int i,j,k;
+	double dE;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<y; j++){
+                        for(k=0; k<z; k++){
+                                dE=-J*(H(g[i][j][k],g[modulo(i+1,x)][j][k]) + H(g[i][j][k],g[modulo(i-1,x)][j][k]) + H(g[i][j][k],g[i][modulo(j+1,y)][k]) + H(g[i][j][k],g[i][modulo(j-1,y)][k]) + H(g[i][j][k],g[i][j][modulo(k+1,z)]) + H(g[i][j][k],g[i][j][modulo(k-1,z)]));
+				E+=dE*dE;
+                        }
+                }
+        }
+return E/(2.0*(e-s+1)*y*z*(e-s+1)*y*z);
+}
+
 
 void exchange(int g[x][y][z], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
 	MPI_Request reqs[4];
