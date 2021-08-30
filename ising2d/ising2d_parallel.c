@@ -12,15 +12,20 @@
 
 void init_grid(int g[m][n], int, gsl_rng *);
 void metropolis_sweep(int g[m][n], int, int, const double , double, gsl_rng *);
+void metropolis_sweep2d(int g[m][n], int, int, int, int, const double , double, gsl_rng *);
 void metropolis_sweep_triangular(int g[m][n], int, int, const double , double, gsl_rng *);
+void metropolis_sweep_triangular2d(int g[m][n], int, int, int, int, const double , double, gsl_rng *);
 void metropolis_sweep_hexagonal(int g[m][n], int, int, const double , double, gsl_rng *);
+void metropolis_sweep_hexagonal2d(int g[m][n], int, int, int, int, const double , double, gsl_rng *);
 double energy(int g[m][n], const double, int, int);
+double energy2d(int g[m][n], const double, int, int, int, int);
 double energy2(int g[m][n], const double, int, int);
 double energy_triangular(int g[m][n], const double, int, int);
-double energy_triangular2(int g[m][n], const double, int, int);
+double energy_triangular2d(int g[m][n], const double, int, int, int, int);
 double energy_hexagonal(int g[m][n], const double, int, int);
-double energy_hexagonal2(int g[m][n], const double, int, int);
+double energy_hexagonal2d(int g[m][n], const double, int, int, int, int);
 double magnetisation(int g[m][n], int, int);
+double magnetisation2d(int g[m][n], int, int, int, int);
 double magnetisation2(int g[m][n], int, int);
 void print_matrix(int g[m][n]);
 void exchange(int g[m][n], int, int, int, int, MPI_Comm);
@@ -32,9 +37,13 @@ int modulo(int, int);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[m][n], int g[m][n]);
 double var_mag(int g[m][n], int, int, double);
+double var_mag2d(int g[m][n], int, int, int, int, double);
 double var_enrg(int g[m][n], int, int, double, double);
+double var_enrg2d(int g[m][n], int, int, int, int, double, double);
 double var_enrg_tri(int g[m][n], int, int, double, double);
+double var_enrg_tri2d(int g[m][n], int, int, int, int, double, double);
 double var_enrg_hex(int g[m][n], int, int, double, double);
+double var_enrg_hex2d(int g[m][n], int, int, int, int, double, double);
 
 
 int main(int argc, char **argv){
@@ -341,7 +350,7 @@ int main(int argc, char **argv){
 	decomp1d(m, ddims2[0], rank%ddims2[0], &s2, &e2); //Decompose cols
 	decomp1d(n, ddims2[1], (rank-(rank%ddims2[0]))/ddims2[0], &s, &e); //Decompose rows
 
-	//printf("%d %d %d %d %d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot, s, e, s2, e2);
+	printf("%d %d %d %d %d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot, s, e, s2, e2);
 
 	//Change prng for each process
 	unsigned long seed2 = (1999*rank);
@@ -360,7 +369,168 @@ int main(int argc, char **argv){
 		sus = malloc(r2*sizeof(double));
 	}
 
-	
+	//Perform the simulations and calculate an average for each observables at each temperature
+	if(sq==1){
+	for(int k=0; k<r1; k++){
+		T=0.0001; //reset the temperature for each simulation
+		double t;
+		for(int j=0; j<r2; j++){
+			t=1/T;
+			for(int i=0; i<r3; i++){
+				metropolis_sweep2d(g,s,e,s2,e2,J,t,gsl_mt);
+				exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+				/*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
+				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+				MPI_Barrier(MPI_COMM_WORLD);
+				if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
+				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+				MPI_Barrier(MPI_COMM_WORLD);*/
+				//if(rank%2==i%2) metropolis_sweep(g,s,e,J,T,k);
+				//exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
+			}
+			//calculate the magnetisation per site for each process then get the average on the root process
+			double mag, enrg, mag2, enrg2;
+			double M = magnetisation2d(g,s,e,s2,e2);
+			double E = energy2d(g,J,s,e,s2,e2);
+			double M2 = var_mag2d(g,s,e,s2,e2,M);//magnetisation2(g,s,e);
+			double E2 = var_enrg2d(g,s,e,s2,e2,J,E);//energy2(g,J,s,e); 
+			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E2, &enrg2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			if(rank==0){
+				mag/=size;
+				enrg/=size;
+				mag2/=size;
+				enrg2/=size;
+				magnetisations[j]+=mag/r1;
+				energies[j]+=enrg/r1;
+				specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
+				sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
+				if(k==0) temps[j] = T;
+			}
+			T+=0.05;
+			//Reset grid to original arrangement
+			//reset_grid(G,g);
+			init_grid(g,c,gsl_mt);
+			exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+		}
+	}
+	}
+
+	if(triangle==1){
+        for(int k=0; k<r1; k++){
+                T=0.0001; //reset the temperature for each simulation
+		double t;
+                for(int j=0; j<r2; j++){
+			t=1/T;
+                        for(int i=0; i<r3; i++){
+                                metropolis_sweep_triangular2d(g,s,e,s2,e2,J,t,gsl_mt);
+                                exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+                                /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
+                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+                                MPI_Barrier(MPI_COMM_WORLD);
+                                if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
+                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+                                MPI_Barrier(MPI_COMM_WORLD);*/
+                                //if(rank%2==i%2) metropolis_sweep_triangular(g,s,e,J,T,k);
+                                //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
+                        }
+                        //calculate the magnetisation per site for each process then get the average on the root process
+                        double mag, enrg, mag2, enrg2;
+                        double M = magnetisation2d(g,s,e,s2,e2);
+                        double E = energy_triangular2d(g,J,s,e,s2,e2);
+			double M2 = var_mag2d(g,s,e,s2,e2,M);//magnetisation2(g,s,e);
+			double E2 = var_enrg_tri2d(g,s,e,s2,e2,J,E);//energy_triangular2(g,J,s,e);
+                        MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+                        MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E2, &enrg2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+                        if(rank==0){
+                                mag/=size;
+                                enrg/=size;
+				mag2/=size;
+				enrg2/=size;
+                                magnetisations[j]+=mag/r1;
+                                energies[j]+=enrg/r1;
+                                specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
+                                sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
+                                if(k==0) temps[j] = T;
+                        }
+                        T+=0.07;
+                        //Reset grid to original arrangement
+                        //reset_grid(G,g);
+                        init_grid(g,c,gsl_mt);
+			exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+                }
+        }
+	}
+
+	if(hex==1){
+        for(int k=0; k<r1; k++){
+                T=0.0001; //reset the temperature for each simulation
+		double t;
+                for(int j=0; j<r2; j++){
+			t=1/T;
+                        for(int i=0; i<r3; i++){
+                                metropolis_sweep_hexagonal2d(g,s,e,s2,e2,J,t,gsl_mt);
+                                exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+                                /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
+                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+                                MPI_Barrier(MPI_COMM_WORLD);
+                                if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
+                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+                                MPI_Barrier(MPI_COMM_WORLD);*/
+                                //if(rank%2==i%2) metropolis_sweep_hexagonal(g,s,e,J,T,k);
+                                //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
+                        }
+                        //calculate the magnetisation per site for each process then get the average on the root process
+                        double mag, enrg, mag2, enrg2;
+                        double M = magnetisation2d(g,s,e,s2,e2);
+                        double E = energy_hexagonal2d(g,J,s,e,s2,e2);
+			double M2 = var_mag2d(g,s,e,s2,e2,M);//magnetisation2(g,s,e);
+			double E2 = var_enrg_hex2d(g,s,e,s2,e2,J,E);//energy_hexagonal2(g,J,s,e);
+                        MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+                        MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+			MPI_Reduce(&E2, &enrg2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+                        if(rank==0){
+                                mag/=size;
+                                enrg/=size;
+				mag2/=size;
+				enrg2/=size;
+                                magnetisations[j]+=mag/r1;
+                                energies[j]+=enrg/r1;
+                                specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
+                                sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
+                                if(k==0) temps[j] = T;
+                        }
+                        T+=0.05;
+                        //Reset grid to original arrangement
+                        //reset_grid(G,g);
+                        init_grid(g,c,gsl_mt);
+			exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+                }
+        }
+	}
+
+	//Save observables and free memory
+	if(rank==0){
+		char title[100];
+        	if(hex==1 && c==0) snprintf(title, 100, "stats_hexagonal_parallel_hot_2d.txt");
+        	if(triangle==1 && c==0) snprintf(title, 100, "stats_triangular_parallel_hot_2d.txt");
+        	if(sq==1 && c==0) snprintf(title, 100, "stats_square_parallel_hot_2d.txt");
+                if(hex==1 && c==1) snprintf(title, 100, "stats_hexagonal_parallel_cold_2d.txt");
+                if(triangle==1 && c==1) snprintf(title, 100, "stats_triangular_parallel_cold_2d.txt");
+                if(sq==1 && c==1) snprintf(title, 100, "stats_square_parallel_cold_2d.txt");
+
+		write_stats(title, magnetisations, energies, specs, sus, temps, r2);
+		free(magnetisations);
+		free(energies);
+		free(temps);
+		free(specs);
+		free(sus);
+	}	
 	}
 	MPI_Finalize();
 return 0;
@@ -405,6 +575,21 @@ void metropolis_sweep(int g[m][n], int s, int e, const double J, double T, gsl_r
 			}
 		}
 	}
+}
+
+void metropolis_sweep2d(int g[m][n], int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
+        int i,j;
+        double dE;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        //Calculate the energy difference and check if spin has to be flipped
+                        dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
+                        if(dE<=0) g[i][j]*=-1;
+                        else{
+                                if(gsl_rng_uniform(gsl_mt)<exp(-dE*T)) g[i][j]*=-1;
+                        }
+                }
+        }
 }
 
 void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
@@ -486,11 +671,42 @@ void metropolis_sweep_triangular(int g[m][n], int s, int e, const double J, doub
         }
 }
 
+void metropolis_sweep_triangular2d(int g[m][n], int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
+        int i,j;
+        double dE;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        //Calculate the energy difference and check if spin has to be flipped
+                        dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]  + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                        if(dE<=0) g[i][j]*=-1;
+                        else{
+                                if(gsl_rng_uniform(gsl_mt)<exp(-dE*T)) g[i][j]*=-1;
+                        }
+                }
+        }
+}
+
+
 void metropolis_sweep_hexagonal(int g[m][n], int s, int e, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
 	double dE;
         for(i=s; i<=e; i++){
                 for(j=0; j<n; j++){
+                        //Calculate the energy difference and check if spin has to be flipped
+                        dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                        if(dE<=0) g[i][j]*=-1;
+                        else{
+                                if(gsl_rng_uniform(gsl_mt)<exp(-dE*T)) g[i][j]*=-1;
+                        }
+                }
+        }
+}
+
+void metropolis_sweep_hexagonal2d(int g[m][n], int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
+        int i,j;
+        double dE;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
                         //Calculate the energy difference and check if spin has to be flipped
                         dE = 2*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
                         if(dE<=0) g[i][j]*=-1;
@@ -542,8 +758,20 @@ double energy(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n);
 }
 
+double energy2d(int g[m][n], const double J, int s, int e, int s2, int e2){
+        int i,j;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*(e2-s2+1));
+}
+
+
 //Calculate the energy per site of the system
-double energy2(int g[m][n], const double J, int s, int e){
+/*double energy2(int g[m][n], const double J, int s, int e){
         int i,j;
         double dE;
         double E=0;
@@ -554,7 +782,7 @@ double energy2(int g[m][n], const double J, int s, int e){
                 }
         }
 return E/(2.0*(e-s+1)*n*(e-s+1)*n);
-}
+}*/
 
 double var_enrg(int g[m][n], int s, int e, double J, double avg){
         int i,j;
@@ -567,8 +795,23 @@ double var_enrg(int g[m][n], int s, int e, double J, double avg){
                         var += (dE - avg)*(dE - avg);
                 }
         }
-return var/(m*n);
+return var/((e-s+1)*n);
 }
+
+double var_enrg2d(int g[m][n], int s, int e, int s2, int e2, double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/((e-s+1)*(e2-s2+1));
+}
+
 
 double energy_triangular(int g[m][n], const double J, int s, int e){
         int i,j;
@@ -581,7 +824,19 @@ double energy_triangular(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n);
 }
 
-double energy_triangular2(int g[m][n], const double J, int s, int e){
+double energy_triangular2d(int g[m][n], const double J, int s, int e, int s2, int e2){
+        int i,j;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*(e2-s2+1));
+}
+
+
+/*double energy_triangular2(int g[m][n], const double J, int s, int e){
         int i,j;
 	double dE;
         double E=0;
@@ -592,7 +847,7 @@ double energy_triangular2(int g[m][n], const double J, int s, int e){
                 }
         }
 return E/(2.0*(e-s+1)*n*(e-s+1)*n);
-}
+}*/
 
 double var_enrg_tri(int g[m][n], int s, int e, double J, double avg){
         int i,j;
@@ -605,7 +860,21 @@ double var_enrg_tri(int g[m][n], int s, int e, double J, double avg){
                         var += (dE - avg)*(dE - avg);
                 }
         }
-return var/(m*n);
+return var/((e-s+1)*n);
+}
+
+double var_enrg_tri2d(int g[m][n], int s, int e, int s2, int e2, double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/((e-s+1)*(e2-s2+1));
 }
 
 
@@ -620,7 +889,19 @@ double energy_hexagonal(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n);
 }
 
-double energy_hexagonal2(int g[m][n], const double J, int s, int e){
+double energy_hexagonal2d(int g[m][n], const double J, int s, int e, int s2, int e2){
+        int i,j;
+        double E=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                }
+        }
+return E/(2.0*(e-s+1)*(e2-s2+1));
+}
+
+
+/*double energy_hexagonal2(int g[m][n], const double J, int s, int e){
         int i,j;
 	double dE;
         double E=0;
@@ -631,7 +912,7 @@ double energy_hexagonal2(int g[m][n], const double J, int s, int e){
                 }
         }
 return E/(2.0*(e-s+1)*n*(e-s+1)*n);
-}
+}*/
 
 double var_enrg_hex(int g[m][n], int s, int e, double J, double avg){
         int i,j;
@@ -644,7 +925,21 @@ double var_enrg_hex(int g[m][n], int s, int e, double J, double avg){
                         var += (dE - avg)*(dE - avg);
                 }
         }
-return var/(m*n);
+return var/((e-s+1)*n);
+}
+
+double var_enrg_hex2d(int g[m][n], int s, int e, int s2, int e2, double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/((e-s+1)*(e2-s2+1));
 }
 
 
@@ -661,7 +956,20 @@ return fabs(M/((e-s+1)*n));
 }
 
 //Calculate magnetisation per site
-double magnetisation2(int g[m][n], int s, int e){
+double magnetisation2d(int g[m][n], int s, int e, int s2, int e2){
+        int i,j;
+        double M=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        M+=g[i][j];
+                }
+        }
+return fabs(M/((e-s+1)*(e2-s2+1)));
+}
+
+
+//Calculate magnetisation per site
+/*double magnetisation2(int g[m][n], int s, int e){
         int i,j;
         double M=0;
         for(i=s; i<=e; i++){
@@ -670,7 +978,7 @@ double magnetisation2(int g[m][n], int s, int e){
                 }
         }
 return fabs(M/((e-s+1)*n*(e-s+1)*n));
-}
+}*/
 
 double var_mag(int g[m][n], int s, int e, double avg){
         int i,j;
@@ -683,6 +991,19 @@ double var_mag(int g[m][n], int s, int e, double avg){
                 }
         }
 return var/(m*n);
+}
+
+double var_mag2d(int g[m][n], int s, int e, int s2, int e2, double avg){
+        int i,j;
+        //double dM;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        //dM = g[i][j]-avg;
+                        var += (g[i][j] - avg)*(g[i][j] - avg);
+                }
+        }
+return var/((e-s+1)*(e2-s2+1));
 }
 
 
@@ -698,7 +1019,7 @@ void print_matrix(int g[m][n]){
 }
 
 
-void print_in_order(int g[m][n], MPI_Comm comm)
+/*void print_in_order(int g[m][n], MPI_Comm comm)
 {
   int myid, size;
   int i;
@@ -719,7 +1040,7 @@ void print_in_order(int g[m][n], MPI_Comm comm)
     usleep(500);	
     MPI_Barrier(MPI_COMM_WORLD);
   }
-}
+}*/
 
 int modulo(int a, int b){
 	int r = a%b;
