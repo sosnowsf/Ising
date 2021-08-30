@@ -53,7 +53,7 @@ int main(int argc, char **argv){
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	int c=0;
 
-	double r1 = 50.0; //Number of simulations
+	double r1 = 10.0; //Number of simulations
 	int r2 = 100; //Number of temperatures
 	int r3 = 1000; //Number of sweeps
 
@@ -595,10 +595,16 @@ void metropolis_sweep2d(int g[m][n], int s, int e, int s2, int e2, const double 
 void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
 	MPI_Request reqs[4];
 
-	MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[0]);
+/*	MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[0]);
         MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[1]);
         MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[2]);
         MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
+*/
+        MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[0]);
+        MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[1]);
+        MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[2]);
+        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
+
 
 	MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
 }
@@ -608,18 +614,18 @@ void exchange2d(int g[m][n], int s, int e, int s2, int e2, int nbrtop, int nbrbo
 
 	//Send columns
 	MPI_Datatype col;
-	MPI_Type_vector(e-s+1, 1, n, MPI_INT, &col);
+	MPI_Type_vector(e-s, 1, n, MPI_INT, &col);
 	MPI_Type_commit(&col);
 	MPI_Irecv(&g[s][modulo(e2+1,n)], 1, col, nbrright, 0, comm, &reqs[0]);
-	MPI_Irecv(&g[s][modulo(s2-1,n)], 1, col, nbrleft, 0, comm, &reqs[1]);
-	MPI_Isend(&g[s][e2], 1, col, nbrleft, 0, comm, &reqs[2]);
-	MPI_Isend(&g[s][s2], 1, col, nbrright, 0, comm, &reqs[3]);
+	MPI_Irecv(&g[s][modulo(s2-1,n)], 1, col, nbrleft, 1, comm, &reqs[1]);
+	MPI_Isend(&g[s][s2], 1, col, nbrleft, 0, comm, &reqs[2]);
+	MPI_Isend(&g[s][e2], 1, col, nbrright, 1, comm, &reqs[3]);
 
 	//Send rows
-	MPI_Irecv(&g[modulo(s-1,m)][s2], e2-s2+1, MPI_INT, nbrtop, 0, comm, &reqs[4]);
-	MPI_Irecv(&g[modulo(e+1,m)][s2], e2-s2+1, MPI_INT, nbrbot, 0, comm, &reqs[5]);
-	MPI_Isend(&g[modulo(e,m)][s2], e2-s2+1, MPI_INT, nbrbot, 0, comm, &reqs[6]);
-	MPI_Isend(&g[modulo(s,m)][s2], e2-s2+1, MPI_INT, nbrtop, 0, comm, &reqs[7]);
+	MPI_Irecv(&g[modulo(e+1,m)][s2], e2-s2+1, MPI_INT, nbrtop, 2, comm, &reqs[4]);
+	MPI_Irecv(&g[modulo(s-1,m)][s2], e2-s2+1, MPI_INT, nbrbot, 3, comm, &reqs[5]);
+	MPI_Isend(&g[modulo(s,m)][s2], e2-s2+1, MPI_INT, nbrbot, 2, comm, &reqs[6]);
+	MPI_Isend(&g[modulo(e,m)][s2], e2-s2+1, MPI_INT, nbrtop, 3, comm, &reqs[7]);
 
 	MPI_Waitall(8, reqs, MPI_STATUSES_IGNORE);
 	MPI_Type_free(&col);
