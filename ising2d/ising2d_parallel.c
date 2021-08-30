@@ -7,8 +7,8 @@
 #include<gsl/gsl_randist.h>
 #include"decomp1d.h"
 
-#define m 50
-#define n 50
+#define m 100
+#define n 100
 
 void init_grid(int g[m][n], int, gsl_rng *);
 void metropolis_sweep(int g[m][n], int, int, const double , double, gsl_rng *);
@@ -25,21 +25,27 @@ double magnetisation2(int g[m][n], int, int);
 void print_matrix(int g[m][n]);
 void exchange(int g[m][n], int, int, int, int, MPI_Comm);
 void exchange2(int g[m][n], int, int, int, int, int, int, MPI_Comm);
+void exchange2d(int g[m][n], int, int, int, int, int, int, int, int, MPI_Comm);
 //void gather(int g[m][n], int, int, int, int);
 void print_in_order(int g[m][n], MPI_Comm comm);
 int modulo(int, int);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[m][n], int g[m][n]);
+double var_mag(int g[m][n], int, int, double);
+double var_enrg(int g[m][n], int, int, double, double);
+double var_enrg_tri(int g[m][n], int, int, double, double);
+double var_enrg_hex(int g[m][n], int, int, double, double);
+
 
 int main(int argc, char **argv){
-	int rank, size, s, e, nbrtop, nbrbot;
+	int rank, size, s, e, s2, e2, nbrtop, nbrbot, nbrleft, nbrright;
 	double T = 0.0001; //Start at 0 degrees Celsius
 	const double J = 1.0; //Coupling constant
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	int c=0;
 
-	double r1 = 10; //Number of simulations
-	int r2 = 50; //Number of temperatures
+	double r1 = 50.0; //Number of simulations
+	int r2 = 100; //Number of temperatures
 	int r3 = 1000; //Number of sweeps
 
 	//Seed prng and inititate grid
@@ -60,8 +66,9 @@ int main(int argc, char **argv){
         int sq=0;
         int triangle=0;
         int hex=0;
+	int d=1;
         int opt;
-        while((opt = getopt(argc, argv, "123hc")) != -1){
+        while((opt = getopt(argc, argv, "123hcd")) != -1){
                 switch(opt){
                         case '1':
                                 sq = 1;
@@ -75,8 +82,11 @@ int main(int argc, char **argv){
 			case 'c':
 				c=1;
 				break;
+			case 'd':
+				d=2;
+				break;
 			case 'h':
-				printf("Command lines:\n -1 for square grid\n -2 for triangular grid \n -3 for hexagonal grid\n");
+				printf("Command lines:\n -1 for square grid\n -2 for triangular grid \n -3 for hexagonal grid\n -c for cold start (hot start default)\n -d for two dimensional exchange");
 				return 0;
                 }
         }
@@ -96,11 +106,23 @@ int main(int argc, char **argv){
 	int dims[1];
 	int periods[1];
 	int reorder;
-	int source1, source2;
+	int source1, source2, source3, source4;
+
+	//Variables for 2D decomposition
+	int dims2[2];
+	int periods2[2];
+
+	int ndims2=2;
+	int ddims2[2];
+	ddims2[0]=ddims2[1]=0;
 	
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+
+	//1D decomposition
+	if(d==1){
 
 	MPI_Comm cart;
 	ndims=1;
@@ -140,7 +162,7 @@ int main(int argc, char **argv){
 		double t;
 		for(int j=0; j<r2; j++){
 			t=1/T;
-			for(int i=0; i<2*r3; i++){
+			for(int i=0; i<r3; i++){
 				metropolis_sweep(g,s,e,J,t,gsl_mt);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
 				/*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
@@ -156,8 +178,8 @@ int main(int argc, char **argv){
 			double mag, enrg, mag2, enrg2;
 			double M = magnetisation(g,s,e);
 			double E = energy(g,J,s,e);
-			double M2 = magnetisation2(g,s,e);
-			double E2 = energy2(g,J,s,e); 
+			double M2 = var_mag(g,s,e,M);//magnetisation2(g,s,e);
+			double E2 = var_enrg(g,s,e,J,E);//energy2(g,J,s,e); 
 			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -169,11 +191,11 @@ int main(int argc, char **argv){
 				enrg2/=size;
 				magnetisations[j]+=mag/r1;
 				energies[j]+=enrg/r1;
-				specs[j] += fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
-				sus[j] += fabs(M2 - ((mag)*(mag)))*T/r1;
+				specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
+				sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
 				if(k==0) temps[j] = T;
 			}
-			T+=0.1;
+			T+=0.05;
 			//Reset grid to original arrangement
 			//reset_grid(G,g);
 			init_grid(g,c,gsl_mt);
@@ -181,13 +203,14 @@ int main(int argc, char **argv){
 		}
 	}
 	}
+
 	if(triangle==1){
         for(int k=0; k<r1; k++){
                 T=0.0001; //reset the temperature for each simulation
 		double t;
                 for(int j=0; j<r2; j++){
 			t=1/T;
-                        for(int i=0; i<2*r3; i++){
+                        for(int i=0; i<r3; i++){
                                 metropolis_sweep_triangular(g,s,e,J,t,gsl_mt);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
@@ -203,8 +226,8 @@ int main(int argc, char **argv){
                         double mag, enrg, mag2, enrg2;
                         double M = magnetisation(g,s,e);
                         double E = energy_triangular(g,J,s,e);
-			double M2 = magnetisation2(g,s,e);
-			double E2 = energy_triangular2(g,J,s,e);
+			double M2 = var_mag(g,s,e,M);//magnetisation2(g,s,e);
+			double E2 = var_enrg_tri(g,s,e,J,E);//energy_triangular2(g,J,s,e);
                         MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -216,11 +239,11 @@ int main(int argc, char **argv){
 				enrg2/=size;
                                 magnetisations[j]+=mag/r1;
                                 energies[j]+=enrg/r1;
-                                specs[j] += fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
-                                sus[j] += fabs(M2 - ((mag)*(mag)))*T/r1;
+                                specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
+                                sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
                                 if(k==0) temps[j] = T;
                         }
-                        T+=0.1;
+                        T+=0.07;
                         //Reset grid to original arrangement
                         //reset_grid(G,g);
                         init_grid(g,c,gsl_mt);
@@ -234,7 +257,7 @@ int main(int argc, char **argv){
 		double t;
                 for(int j=0; j<r2; j++){
 			t=1/T;
-                        for(int i=0; i<2*r3; i++){
+                        for(int i=0; i<r3; i++){
                                 metropolis_sweep_hexagonal(g,s,e,J,t,gsl_mt);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
                                 /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
@@ -250,8 +273,8 @@ int main(int argc, char **argv){
                         double mag, enrg, mag2, enrg2;
                         double M = magnetisation(g,s,e);
                         double E = energy_hexagonal(g,J,s,e);
-			double M2 = magnetisation2(g,s,e);
-			double E2 = energy_hexagonal2(g,J,s,e);
+			double M2 = var_mag(g,s,e,M);//magnetisation2(g,s,e);
+			double E2 = var_enrg_hex(g,s,e,J,E);//energy_hexagonal2(g,J,s,e);
                         MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -263,11 +286,11 @@ int main(int argc, char **argv){
 				enrg2/=size;
                                 magnetisations[j]+=mag/r1;
                                 energies[j]+=enrg/r1;
-                                specs[j] += fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
-                                sus[j] += fabs(M2 - ((mag)*(mag)))*T/r1;
+                                specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
+                                sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
                                 if(k==0) temps[j] = T;
                         }
-                        T+=0.1;
+                        T+=0.05;
                         //Reset grid to original arrangement
                         //reset_grid(G,g);
                         init_grid(g,c,gsl_mt);
@@ -291,6 +314,53 @@ int main(int argc, char **argv){
 		free(temps);
 		free(specs);
 		free(sus);
+	}
+	}
+	if(d==2){
+	MPI_Comm cart;
+	ndims=1;
+	dims2[0]=size;
+	dims2[1]=size;
+	periods2[0]=1;
+	periods2[1]=1;
+	reorder=0;
+	MPI_Cart_create(MPI_COMM_WORLD, ndims, dims2, periods2, reorder, &cart);
+
+	//Find the neighbouring processes
+	MPI_Dims_create(size, ndims2, ddims2);
+
+	MPI_Cart_shift(cart, 0, -1, &source1, &nbrleft);
+	MPI_Cart_shift(cart, 0, 1, &source2, &nbrright);
+	MPI_Cart_shift(cart, 0, -ddims2[0], &source3, &nbrtop);
+	MPI_Cart_shift(cart, 0, ddims2[0], &source4, &nbrbot);
+
+	if((rank%ddims2[0])==0) nbrleft = (nbrleft+ddims2[0])%size;
+	if((rank%ddims2[0])==(ddims2[0]-1)) nbrright = modulo(nbrright-ddims2[0],size);
+	//printf("%d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot);
+
+	decomp1d(m, ddims2[0], rank%ddims2[0], &s2, &e2); //Decompose cols
+	decomp1d(n, ddims2[1], (rank-(rank%ddims2[0]))/ddims2[0], &s, &e); //Decompose rows
+
+	//printf("%d %d %d %d %d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot, s, e, s2, e2);
+
+	//Change prng for each process
+	unsigned long seed2 = (1999*rank);
+	gsl_rng_set(gsl_mt, seed2);
+	//srand48(seed*rank+1);
+	
+	//printf("%d %d %d %d %d\n", rank, s, e, nbrtop, nbrbot);
+
+	//Allocate memory to store the required stats
+	double *magnetisations, *energies, *specs, *sus, *temps;
+	if(rank==0){
+		magnetisations = (double *)malloc(r2*sizeof(double));
+		energies = (double *)malloc(r2*sizeof(double));
+		temps = (double *)malloc(r2*sizeof(double));
+		specs = malloc(r2*sizeof(double));
+		sus = malloc(r2*sizeof(double));
+	}
+
+	
 	}
 	MPI_Finalize();
 return 0;
@@ -346,6 +416,28 @@ void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
         MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
 
 	MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
+}
+
+void exchange2d(int g[m][n], int s, int e, int s2, int e2, int nbrtop, int nbrbot, int nbrleft, int nbrright, MPI_Comm comm){
+	MPI_Request reqs[8];
+
+	//Send columns
+	MPI_Datatype col;
+	MPI_Type_vector(e-s+1, 1, n, MPI_INT, &col);
+	MPI_Type_commit(&col);
+	MPI_Irecv(&g[s][modulo(e2+1,n)], 1, col, nbrright, 0, comm, &reqs[0]);
+	MPI_Irecv(&g[s][modulo(s2-1,n)], 1, col, nbrleft, 0, comm, &reqs[1]);
+	MPI_Isend(&g[s][e2], 1, col, nbrleft, 0, comm, &reqs[2]);
+	MPI_Isend(&g[s][s2], 1, col, nbrright, 0, comm, &reqs[3]);
+
+	//Send rows
+	MPI_Irecv(&g[modulo(s-1,m)][s2], e2-s2+1, MPI_INT, nbrtop, 0, comm, &reqs[4]);
+	MPI_Irecv(&g[modulo(e+1,m)][s2], e2-s2+1, MPI_INT, nbrbot, 0, comm, &reqs[5]);
+	MPI_Isend(&g[modulo(e,m)][s2], e2-s2+1, MPI_INT, nbrbot, 0, comm, &reqs[6]);
+	MPI_Isend(&g[modulo(s,m)][s2], e2-s2+1, MPI_INT, nbrtop, 0, comm, &reqs[7]);
+
+	MPI_Waitall(8, reqs, MPI_STATUSES_IGNORE);
+	MPI_Type_free(&col);
 }
 
 void exchange2(int g[m][n], int s, int e, int nbrtop, int nbrbot, int rank, int turn, MPI_Comm comm){
@@ -464,6 +556,19 @@ double energy2(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n*(e-s+1)*n);
 }
 
+double var_enrg(int g[m][n], int s, int e, double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/(m*n);
+}
 
 double energy_triangular(int g[m][n], const double J, int s, int e){
         int i,j;
@@ -487,6 +592,20 @@ double energy_triangular2(int g[m][n], const double J, int s, int e){
                 }
         }
 return E/(2.0*(e-s+1)*n*(e-s+1)*n);
+}
+
+double var_enrg_tri(int g[m][n], int s, int e, double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+			dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/(m*n);
 }
 
 
@@ -514,6 +633,21 @@ double energy_hexagonal2(int g[m][n], const double J, int s, int e){
 return E/(2.0*(e-s+1)*n*(e-s+1)*n);
 }
 
+double var_enrg_hex(int g[m][n], int s, int e, double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+			dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/(m*n);
+}
+
+
 //Calculate magnetisation per site
 double magnetisation(int g[m][n], int s, int e){
 	int i,j;
@@ -536,6 +670,19 @@ double magnetisation2(int g[m][n], int s, int e){
                 }
         }
 return fabs(M/((e-s+1)*n*(e-s+1)*n));
+}
+
+double var_mag(int g[m][n], int s, int e, double avg){
+        int i,j;
+        //double dM;
+        double var=0;
+        for(i=s; i<=e; i++){
+                for(j=0; j<n; j++){
+                        //dM = g[i][j]-avg;
+                        var += (g[i][j] - avg)*(g[i][j] - avg);
+                }
+        }
+return var/(m*n);
 }
 
 
