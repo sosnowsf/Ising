@@ -29,7 +29,9 @@ double var_mag(int g[m][n], double);
 double var_enrg(int g[m][n], double, double);
 double var_enrg_tri(int g[m][n], double, double);
 double var_enrg_hex(int g[m][n], double, double);
-
+//void autocorrelation(double *, double *, int);
+void write_stats_autocorr(char *title, double *autocorr, int r2);
+double autocorrelation(int k, int N, double *x);
 
 int main(int argc, char *argv[]){
 
@@ -71,7 +73,7 @@ int main(int argc, char *argv[]){
 	const double J = 1.0; //Coupling constant
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	
-	double r1 = 50.0; //Number of times simulation is ran to ge the average
+	double r1 = 1.0;//50.0; //Number of times simulation is ran to ge the average
 	int r2 = 100; //Number of temperatures
 	int r3 = 1000; //Number of sweeps
 
@@ -100,6 +102,11 @@ int main(int argc, char *argv[]){
 	temp = malloc(r2*sizeof(double));
 	spec = malloc(r2*sizeof(double));
 	sus = malloc(r2*sizeof(double));	
+
+	//Arrays for autocorrelation
+	double *mag2, *autocorr;
+	mag2 = malloc(r3*sizeof(double));
+	autocorr = malloc(r3*sizeof(double));
 
 	for(int i=0; i<r2; i++){
 		mag[i]=0.0;
@@ -182,6 +189,20 @@ int main(int argc, char *argv[]){
 			t=1/T;
 			for(int i=0; i<r3; i++){
 				metropolis_sweep(g,J,t,gsl_mt);
+				//Measure autocorrelation 
+				if(k==0 && (T==0 || T==2.2501 || T==4.5001)){
+					mag2[i] = magnetisation(g);
+					//printf("%f\n", mag2[i]);
+					autocorr[i] = autocorrelation(i,r3,mag2);
+					//snprintf(title, 100, "Autocorrelations.txt");
+					//write_stats_autocorr(title, temp, autocorr, r2);
+				}
+				
+			}
+			if(k==0 && (T==0 || T==2.2501 || T==4.5001)){
+				char title[100];
+				snprintf(title, 100, "Autocorrelations_T%f.txt", T);
+				write_stats_autocorr(title, autocorr, r3);
 			}
 			if(k==0){
 				char title2[100];
@@ -201,6 +222,9 @@ int main(int argc, char *argv[]){
                         T+=0.05;
                         init_grid(g,c,gsl_mt);
 		}
+		//if(k==0 && r1==1){
+		//	autocorrelation(mag, autocorr, r2);
+		//}
 	}
 	}
 	//Save observables and free memory
@@ -211,7 +235,9 @@ int main(int argc, char *argv[]){
         if(hex==1 && c==0) snprintf(title, 100, "stats_hexagonal_serial_hot.txt");
         if(triangle==1 && c==0) snprintf(title, 100, "stats_triangular_serial_hot.txt");
         if(sq==1 && c==0) snprintf(title, 100, "stats_square_serial_hot.txt");
-	write_stats(title,mag,enrgy,sus,spec,temp,r2);
+//	snprintf(title, 100, "Autocorrelations.txt");
+//	write_stats(title,mag,enrgy,sus,spec,temp,r2);
+//	write_stats_autocorr(title, temp, autocorr, r2);
 	free(mag);
 	free(enrgy);
 	free(temp);
@@ -481,6 +507,14 @@ void write_stats(char *title, double *mag, double *energy, double *sus, double *
 	fclose(fp);
 }
 
+void write_stats_autocorr(char *title, double *autocorr, int r2){
+	FILE *fp = fopen(title, "w");
+	for(int i=0; i<r2; i++){
+			fprintf(fp, "%f \n", autocorr[i]);
+	}
+	fclose(fp);
+}
+
 void save_configuration(char *title, int g[m][n]){
 	FILE *fp = fopen(title, "w");
 	int i,j;
@@ -497,3 +531,95 @@ int modulo(int a, int b){
 	if(r<0) r+=b;
 return r;
 }
+
+/*void autocorrelation(double *x, double *autocorr, int size){
+	//double autocorr[size];
+	double sum;
+	int i,j;
+	for(i=0; i<size; i++){
+		for(j=0; j<size-i; j++){
+			sum+=x[j]*x[j-1];
+		}
+		autocorr[i]=sum;
+	}
+}
+*/
+
+double autocorrelation(int t, int N, double *x){
+	double sum=0;
+	double x1=0;
+	double x2=0;
+	double x3=0;
+/*	for(int i=0; i<=(N-k-1); i++){
+		x1+=x[i];
+	}
+	for(int j=0; j<=(N-k-1); j++){
+		sum+= x[k+j]*(x[j] - (1/(N-k))*x1);
+	}
+*/
+	//for(int k=0; k<N; k++){
+	//	if(x[k]>1) printf("%f\n", x[k]);
+	//}
+	//for(int i=0; i<(N-t); i++){
+		//printf("%f %f\n", x[i], x[i-1]);
+	//	x1+=x[i]*x[i-1];//*x[i+t];
+	//}
+	//x1/=(N-t);
+	//for(int j=0; j<N; j++){
+		//printf("%f\n",x[j]);
+	//	x2+=x[j];
+	//}
+	//x2/=N;
+	//for(int i=0; i<(N-t); i++){
+	//	x1+=(x[i])*(x[i+t]);
+	//}
+	//x1/=(N-t);
+/*	for(int j=0; j<(N-t); j++){
+		x2+=x[j];
+		x3+=x[j+t];
+	}
+	x2/=(N-t);
+	x3/=(N-t);
+	for(int i=0; i<(N-t); i++){
+		x1+=(x[i] - x2) * (x[i+t] - x3);
+	}
+	x1/=(N-t);
+	//x2/=(N-t);
+*/	//x3/=(N-t);
+/*	for(int i=0; i<(N-t); i++){
+		x1+=x[i]*x[i+t];
+	}
+	x1/=N;
+	for(int j=0; j<N; j++){
+		x2+=x[j]/N;
+	}
+*/
+
+
+// Works
+	for(int i=0; i<(N-t-1); i++){
+		x2+=x[i];
+	}
+	x2/=(N-t-1);
+	for(int j=0; j<(N-t-1); j++){
+		x1 += x[j+t]*(x[j] - x2);
+	}
+	x1/=(N-t);
+	//printf("%f %f %f\n", x1, x2, x3);
+	sum = x1;//(x1-(x2*x2));//(x1-(x2*x3));
+return sum;
+}
+
+/*void autocorrelation(double *x, double *autocorr, int size){
+        //double autocorr[size];
+       double sum;
+        int i,j;
+        for(i=0; i<size; i++){
+                for(j=0; j<size-i; j++){
+                        sum+=x[j]*x[j-1];
+                }
+                autocorr[i]=sum;
+        }
+
+}*/
+
