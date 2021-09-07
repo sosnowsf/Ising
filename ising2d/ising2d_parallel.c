@@ -44,7 +44,12 @@ double var_enrg_tri(int g[m][n], int, int, double, double);
 double var_enrg_tri2d(int g[m][n], int, int, int, int, double, double);
 double var_enrg_hex(int g[m][n], int, int, double, double);
 double var_enrg_hex2d(int g[m][n], int, int, int, int, double, double);
-
+void save_grid(int g[m][n], int, int);
+void save_grid2d(int g[m][n], int, int, int, int);
+void load_grid(int g[m][n], int, int);
+void load_grid2d(int g[m][n], int, int, int, int);
+void init_grid2(int g[m][n], int, int);
+void init_grid2d2(int g[m][n], int, int, int, int);
 
 int main(int argc, char **argv){
 	int rank, size, s, e, s2, e2, nbrtop, nbrbot, nbrleft, nbrright;
@@ -53,9 +58,9 @@ int main(int argc, char **argv){
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	int c=0;
 
-	double r1 = 10.0; //Number of simulations
+	double r1 = 10.0;//50.0; //Number of simulations
 	int r2 = 100; //Number of temperatures
-	int r3 = 1000; //Number of sweeps
+	int r3 = 10000; //Number of sweeps
 
 	//Seed prng and inititate grid
 	//Seed prng and initiate grid
@@ -188,7 +193,8 @@ int main(int argc, char **argv){
 			double M = magnetisation(g,s,e);
 			double E = energy(g,J,s,e);
 			double M2 = var_mag(g,s,e,M);//magnetisation2(g,s,e);
-			double E2 = var_enrg(g,s,e,J,E);//energy2(g,J,s,e); 
+			double E2 = var_enrg(g,s,e,J,E);//energy2(g,J,s,e);
+			//printf("%d %f %f %f %f\n", rank, M, E, M2, E2);
 			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -205,6 +211,9 @@ int main(int argc, char **argv){
 				if(k==0) temps[j] = T;
 			}
 			T+=0.05;
+			//Save configuration
+			//if(k==0 && j==0) save_grid(g,s,e);
+
 			//Reset grid to original arrangement
 			//reset_grid(G,g);
 			init_grid(g,c,gsl_mt);
@@ -307,10 +316,27 @@ int main(int argc, char **argv){
                 }
         }
 	}
+	//Test MPI-IO
+/*	print_matrix(g);
+	save_grid(g,s,e);
+	MPI_Barrier(MPI_COMM_WORLD);
+	init_grid2(g,0,n-1);//s,e);
+	print_matrix(g);
+	load_grid(g,s,e);
+	MPI_Barrier(MPI_COMM_WORLD);
+	print_matrix(g);
+*/
+    //    init_grid2d2(g,s,e,0,n);//0,n-1, 0, m-1);//s,e);
+     //   print_in_order(g,MPI_COMM_WORLD);//matrix(g);
+//	exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+   //     load_grid2d(g,s,e,s2,e2);
+    //    MPI_Barrier(MPI_COMM_WORLD);
+//        print_in_order(g, MPI_COMM_WORLD);
+	
 	//Save observables and free memory
 	if(rank==0){
 		char title[100];
-        	if(hex==1 && c==0) snprintf(title, 100, "stats_hexagonal_parallel_hot.txt");
+	      	if(hex==1 && c==0) snprintf(title, 100, "stats_hexagonal_parallel_hot.txt");
         	if(triangle==1 && c==0) snprintf(title, 100, "stats_triangular_parallel_hot.txt");
         	if(sq==1 && c==0) snprintf(title, 100, "stats_square_parallel_hot.txt");
                 if(hex==1 && c==1) snprintf(title, 100, "stats_hexagonal_parallel_cold.txt");
@@ -514,6 +540,24 @@ int main(int argc, char **argv){
         }
 	}
 
+        //Test MPI-IO
+        //print_matrix(g);
+//	init_grid2d2(g,s,e,s2,e2);
+ //       save_grid2d(g,s,e,s2,e2);
+//	init_grid(g,c,gsl_mt);
+ //       MPI_Barrier(MPI_COMM_WORLD);
+
+
+/*
+        init_grid2d2(g,s,e,s2,e2);//0,n-1, 0, m-1);//s,e);
+        print_in_order(g,MPI_COMM_WORLD);//matrix(g);
+	exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
+   //     load_grid2d(g,s,e,s2,e2);
+    //    MPI_Barrier(MPI_COMM_WORLD);
+        print_in_order(g, MPI_COMM_WORLD);
+
+*/
+
 	//Save observables and free memory
 	if(rank==0){
 		char title[100];
@@ -600,10 +644,10 @@ void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
         MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[2]);
         MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
 */
-        MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[0]);
-        MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[1]);
-        MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[2]);
-        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
+        MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[0]);
+        MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[1]);
+        MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[2]);
+        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[3]);
 
 
 	MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
@@ -614,7 +658,7 @@ void exchange2d(int g[m][n], int s, int e, int s2, int e2, int nbrtop, int nbrbo
 
 	//Send columns
 	MPI_Datatype col;
-	MPI_Type_vector(e-s, 1, n, MPI_INT, &col);
+	MPI_Type_vector(e-s, 1, n, MPI_INT, &col);//e-s
 	MPI_Type_commit(&col);
 	MPI_Irecv(&g[s][modulo(e2+1,n)], 1, col, nbrright, 0, comm, &reqs[0]);
 	MPI_Irecv(&g[s][modulo(s2-1,n)], 1, col, nbrleft, 1, comm, &reqs[1]);
@@ -622,10 +666,10 @@ void exchange2d(int g[m][n], int s, int e, int s2, int e2, int nbrtop, int nbrbo
 	MPI_Isend(&g[s][e2], 1, col, nbrright, 1, comm, &reqs[3]);
 
 	//Send rows
-	MPI_Irecv(&g[modulo(e+1,m)][s2], e2-s2+1, MPI_INT, nbrtop, 2, comm, &reqs[4]);
-	MPI_Irecv(&g[modulo(s-1,m)][s2], e2-s2+1, MPI_INT, nbrbot, 3, comm, &reqs[5]);
-	MPI_Isend(&g[modulo(s,m)][s2], e2-s2+1, MPI_INT, nbrbot, 2, comm, &reqs[6]);
-	MPI_Isend(&g[modulo(e,m)][s2], e2-s2+1, MPI_INT, nbrtop, 3, comm, &reqs[7]);
+	MPI_Irecv(&g[modulo(e+1,m)][s2], e2-s2+1, MPI_INT, nbrbot, 2, comm, &reqs[4]);
+	MPI_Irecv(&g[modulo(s-1,m)][s2], e2-s2+1, MPI_INT, nbrtop, 3, comm, &reqs[5]);
+	MPI_Isend(&g[modulo(s,m)][s2], e2-s2+1, MPI_INT, nbrtop, 2, comm, &reqs[6]);
+	MPI_Isend(&g[modulo(e,m)][s2], e2-s2+1, MPI_INT, nbrbot, 3, comm, &reqs[7]);
 
 	MPI_Waitall(8, reqs, MPI_STATUSES_IGNORE);
 	MPI_Type_free(&col);
@@ -996,7 +1040,7 @@ double var_mag(int g[m][n], int s, int e, double avg){
                         var += (g[i][j] - avg)*(g[i][j] - avg);
                 }
         }
-return var/(m*n);
+return var/((e-s+1)*n);
 }
 
 double var_mag2d(int g[m][n], int s, int e, int s2, int e2, double avg){
@@ -1025,7 +1069,7 @@ void print_matrix(int g[m][n]){
 }
 
 
-/*void print_in_order(int g[m][n], MPI_Comm comm)
+void print_in_order(int g[m][n], MPI_Comm comm)
 {
   int myid, size;
   int i;
@@ -1046,7 +1090,7 @@ void print_matrix(int g[m][n]){
     usleep(500);	
     MPI_Barrier(MPI_COMM_WORLD);
   }
-}*/
+}
 
 int modulo(int a, int b){
 	int r = a%b;
@@ -1069,4 +1113,110 @@ void reset_grid(int G[m][n], int g[m][n]){
 			g[i][j]=G[i][j];
 		}
 	}
+}
+
+void save_grid(int g[m][n], int s, int e){
+	MPI_Datatype subarray;
+	int ndims=2;
+	int sizes[2] = {m,n};
+	int subsizes[2] = {(e-s+1),n};
+	int starts[2] = {s,0};
+	MPI_Type_create_subarray(ndims, sizes, subsizes, starts, MPI_ORDER_C, MPI_INT, &subarray);
+	MPI_Type_commit(&subarray);
+
+	MPI_File fh;
+	MPI_File_open(MPI_COMM_WORLD, "configuration.txt", MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
+	MPI_File_set_view(fh, /*s*n*/0, MPI_INT, subarray, "native", MPI_INFO_NULL);
+	MPI_File_write_all(fh, &g[s][0]/*[s][0]*/, (e-s+1)*n, /*subarray*/ MPI_INT, MPI_STATUS_IGNORE);
+	MPI_File_close(&fh);
+	MPI_Type_free(&subarray);
+}
+
+void save_grid2d(int g[m][n], int s, int e, int s2, int e2){
+        MPI_Datatype subarray;
+        int ndims=2;
+        int sizes[2] = {m,n};
+        int subsizes[2] = {(e-s+1),(e2-s2+1)};
+        int starts[2] = {s,s2};
+        MPI_Type_create_subarray(ndims, sizes, subsizes, starts, MPI_ORDER_C, MPI_INT, &subarray);
+        MPI_Type_commit(&subarray);
+
+        MPI_File fh;
+        MPI_File_open(MPI_COMM_WORLD, "configuration.txt", MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, &fh);
+        MPI_File_set_view(fh, /*s*n*/0, MPI_INT, subarray, "native", MPI_INFO_NULL);
+        MPI_File_write_all(fh, &g[s][s2], /*1*/(e-s+1)*n, /*subarray*/ MPI_INT, MPI_STATUS_IGNORE);
+        MPI_File_close(&fh);
+        MPI_Type_free(&subarray);
+}
+
+void load_grid(int g[m][n], int s, int e){
+	MPI_Datatype subarray;
+	int ndims=2;
+	int sizes[2] = {m,n};
+	int subsizes[2] = {(e-s+1),n};
+	int starts[2] = {s,0};
+	MPI_Type_create_subarray(ndims, sizes, subsizes, starts, MPI_ORDER_C, MPI_INT, &subarray);
+	MPI_Type_commit(&subarray);
+
+	MPI_File fh;
+	MPI_File_open(MPI_COMM_WORLD, "configuration.txt", MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+	MPI_File_set_view(fh, 0, subarray, subarray, "native", MPI_INFO_NULL);
+	MPI_File_read_all(fh, &g[0][0], 1, subarray, MPI_STATUS_IGNORE);
+	MPI_File_close(&fh);
+	MPI_Type_free(&subarray);
+
+
+
+//	Alternative code to load full grid instead of just relevant part
+
+//	MPI_File fh1;
+//	MPI_File_open(MPI_COMM_WORLD, "configuration", MPI_MODE_RDONLY, MPI_INFO_NULL, &fh1);
+//	MPI_File_set_view(fh1, 0, MPI_INT, MPI_INT, "native", MPI_INFO_NULL);
+//	MPI_File_read_all(fh1, &g[0][0], m*n, MPI_INT, MPI_STATUS_IGNORE);
+//	MPI_File_close(&fh1);
+
+}
+
+void load_grid2d(int g[m][n], int s, int e, int s2, int e2){
+        MPI_Datatype subarray;
+	//printf("%d %d %d %d\n", s, e, s2, e2);
+        int ndims=2;
+        int sizes[2] = {m,n};
+        int subsizes[2] = {(e-s+1),(e2-s2+1)};
+        int starts[2] = {s,s2};
+        MPI_Type_create_subarray(ndims, sizes, subsizes, starts, MPI_ORDER_C, MPI_INT, &subarray);
+        MPI_Type_commit(&subarray);
+
+        MPI_File fh;
+        MPI_File_open(MPI_COMM_WORLD, "configuration.txt", MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+        MPI_File_set_view(fh, /*((s*n)+(e2-s2+1))*sizeof(int)*/0, /*MPI_INT*/subarray, /*MPI_INT*/subarray, "native", MPI_INFO_NULL);
+	MPI_File_read_all(fh, &g[s][s2], (e-s+1)*n/*(e2-s2+1)*sizeof(int)*/, MPI_INT, MPI_STATUS_IGNORE);
+        //MPI_File_read_all(fh, &g[s][s2], (e-s+1)*(e2-s2+1)*sizeof(int), /*subarray*/MPI_INT, MPI_STATUS_IGNORE);
+        MPI_File_close(&fh);
+        MPI_Type_free(&subarray);
+
+//      Alternative code to load full grid instead of just relevant part
+
+//      MPI_File fh1;
+//      MPI_File_open(MPI_COMM_WORLD, "configuration.txt", MPI_MODE_RDONLY, MPI_INFO_NULL, &fh1);
+//      MPI_File_set_view(fh1, 0, MPI_INT, MPI_INT, "native", MPI_INFO_NULL);
+//      MPI_File_read_all(fh1, &g[0][0], m*n, MPI_INT, MPI_STATUS_IGNORE);
+//      MPI_File_close(&fh1);
+}
+
+
+void init_grid2(int g[m][n], int s, int e){
+	for(int i=s; i<=e; i++){
+		for(int j=0; j<n; j++){
+			g[i][j]=i*m+j;
+		}
+	}
+}
+
+void init_grid2d2(int g[m][n], int s, int e, int s2, int e2){
+        for(int i=s; i<=e; i++){
+                for(int j=s2; j<=e2; j++){
+                        g[i][j]=i*m+j;
+                }
+        }
 }
