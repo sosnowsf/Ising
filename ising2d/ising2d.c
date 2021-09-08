@@ -5,8 +5,8 @@
 #include<gsl/gsl_rng.h>
 #include<gsl/gsl_randist.h>
 
-#define m 50
-#define n 50
+#define m 100
+#define n 100
 
 void init_grid(int g[m][n], int, gsl_rng *);
 void metropolis_sweep(int g[m][n], const double , double, gsl_rng *);
@@ -22,8 +22,16 @@ double magnetisation(int g[m][n]);
 double magnetisation2(int g[m][n]);
 void print_matrix(int g[m][n]);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
+void save_configuration(char *, int g[m][n]);
 void reset_grid(int G[m][n], int g[m][n]);
 int modulo(int, int);
+double var_mag(int g[m][n], double);
+double var_enrg(int g[m][n], double, double);
+double var_enrg_tri(int g[m][n], double, double);
+double var_enrg_hex(int g[m][n], double, double);
+//void autocorrelation(double *, double *, int);
+void write_stats_autocorr(char *title, double *autocorr, int r2);
+double autocorrelation(int k, int N, double *x);
 
 int main(int argc, char *argv[]){
 
@@ -65,8 +73,8 @@ int main(int argc, char *argv[]){
 	const double J = 1.0; //Coupling constant
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	
-	double r1 = 10; //Number of times simulation is ran to ge the average
-	int r2 = 50; //Number of temperatures
+	double r1 = 1.0;//50.0; //Number of times simulation is ran to ge the average
+	int r2 = 100; //Number of temperatures
 	int r3 = 1000; //Number of sweeps
 
 	//int seed = 1997;
@@ -79,6 +87,9 @@ int main(int argc, char *argv[]){
 	gsl_rng_set(gsl_mt, seed);
 
 	init_grid(g,c,gsl_mt);
+	char title1[100];
+	snprintf(title1, 100, "initial_configuration.txt");
+	save_configuration(title1, g);
 
 	//printf("%f %f\n", gsl_ran_gaussian(gsl_mt,1), gsl_ran_gaussian(gsl_mt,1));
 
@@ -92,27 +103,44 @@ int main(int argc, char *argv[]){
 	spec = malloc(r2*sizeof(double));
 	sus = malloc(r2*sizeof(double));	
 
+	//Arrays for autocorrelation
+	double *mag2, *autocorr;
+	mag2 = malloc(r3*sizeof(double));
+	autocorr = malloc(r3*sizeof(double));
+
+	for(int i=0; i<r2; i++){
+		mag[i]=0.0;
+		enrgy[i]=0.0;
+		spec[i]=0.0;
+		sus[i]=0.0;
+	}
+
         if(triangle==1){
         for(int k=0; k<r1; k++){
                 T=0.0001;
-                double M=0.0;
-                double E=0.0;
+                //double M=0.0;
+                //double E=0.0;
 		double t; 
                 for(int j=0; j<r2; j++){
 			t=1/T;
                         for(int i=0; i<r3; i++){
                                 metropolis_sweep_triangular(g,J,t,gsl_mt);
                         }
-                        double m1 = magnetisation(g)/r1;
-                        double e1 = energy_triangular(g,J)/r1;
-                        mag[j] += m1;
-                        enrgy[j] += e1;
-                        M +=  magnetisation2(g);
-                        E +=  energy_triangular2(g,J);
-                        spec[j] += fabs(E-(e1*e1))*(T*T)/r1;
-                        sus[j] += fabs(M-(m1*m1))*T/r1;
+                        if(k==0){
+                                char title2[100];
+                                snprintf(title2, 100, "final_configuration.txt");
+                                save_configuration(title2,g);
+                        }
+                        double m1 = magnetisation(g);
+                        double e1 = energy_triangular(g,J);
+                        mag[j] += m1/r1;
+                        enrgy[j] += e1/r1;
+                        //M +=  magnetisation2(g);
+                        //E +=  energy_triangular2(g,J);
+                        spec[j] += var_enrg_tri(g,J,e1)*t*t/r1;//fabs(E-(e1*e1))*(T*T)/r1;
+                        sus[j] += var_mag(g,m1)*t/r1;//fabs(M-(m1*m1))*T/r1;
                         if(k==0) temp[j] = T;
-                        T+=0.1;
+                        T+=0.07;
                         init_grid(g,c,gsl_mt);
                 }
         }
@@ -122,24 +150,29 @@ int main(int argc, char *argv[]){
         if(hex==1){
         for(int k=0; k<r1; k++){
                 T=0.0001;
-                double M=0.0;
-                double E=0.0;
+                //double M=0.0;
+                //double E=0.0;
 		double t;
                 for(int j=0; j<r2; j++){
 			t=1/T;
                         for(int i=0; i<r3; i++){
                                 metropolis_sweep_hexagonal(g,J,t,gsl_mt);
                         }
-                        double m1 = magnetisation(g)/r1;
-                        double e1 = energy_hexagonal(g,J)/r1;
-                        mag[j] += m1;
-                        enrgy[j] += e1;
-                        M = magnetisation2(g)/r1;
-                        E = energy_hexagonal2(g,J);
-                        spec[j] += fabs(E-(e1*e1))*(T*T)/r1;
-                        sus[j] += fabs(M-(m1*m1))*T/r1;
+                        if(k==0){
+                                char title2[100];
+                                snprintf(title2, 100, "final_configuration.txt");
+                                save_configuration(title2,g);
+                        }
+                        double m1 = magnetisation(g);
+                        double e1 = energy_hexagonal(g,J);
+                        mag[j] += m1/r1;
+                        enrgy[j] += e1/r1;
+                        //M = magnetisation2(g)/r1;
+                        //E = energy_hexagonal2(g,J);
+                        spec[j] += var_enrg_hex(g,J,e1)*t*t/r1;//fabs(E-(e1*e1))*(T*T)/r1;
+                        sus[j] += var_mag(g,m1)*t/r1;//fabs(M-(m1*m1))*T/r1;
                         if(k==0) temp[j] = T;
-                        T+=0.1;
+                        T+=0.05;
                         init_grid(g,c,gsl_mt);
                 }
         }
@@ -149,26 +182,49 @@ int main(int argc, char *argv[]){
 	if(sq==1){
 	for(int k=0; k<r1; k++){
 		T=0.0001;
-		double M=0.0;
-		double E=0.0;
+		//double M=0.0;
+		//double E=0.0;
 		double t;
 		for(int j=0; j<r2; j++){
 			t=1/T;
 			for(int i=0; i<r3; i++){
 				metropolis_sweep(g,J,t,gsl_mt);
+				//Measure autocorrelation 
+				if(k==0 && (T==0 || T==2.2501 || T==4.5001)){
+					mag2[i] = magnetisation(g);
+					//printf("%f\n", mag2[i]);
+					autocorr[i] = autocorrelation(i,r3,mag2);
+					//snprintf(title, 100, "Autocorrelations.txt");
+					//write_stats_autocorr(title, temp, autocorr, r2);
+				}
+				
 			}
-                        double m1 = magnetisation(g)/r1;
-                        double e1 = energy(g,J)/r1;
-                        mag[j] += m1;
-                        enrgy[j] += e1;
-			M=magnetisation2(g)/r1;
-			E=energy2(g,J)/r1;
-                        spec[j] += fabs(E-(e1*e1))*T*T/r1;
-                        sus[j] += fabs(M-(m1*m1))*T/r1;
+			if(k==0 && (T==0 || T==2.2501 || T==4.5001)){
+				char title[100];
+				snprintf(title, 100, "Autocorrelations_T%f.txt", T);
+				write_stats_autocorr(title, autocorr, r3);
+			}
+			if(k==0){
+				char title2[100];
+				snprintf(title2, 100, "final_configuration.txt");
+				save_configuration(title2,g);
+			}
+                        double m1 = magnetisation(g);
+                        double e1 = energy(g,J);
+                        mag[j] += m1/r1;
+                        enrgy[j] += e1/r1;
+			//M=magnetisation2(g)/r1;
+			//E=energy2(g,J)/r1;
+                        spec[j] += var_enrg(g,J,e1)*t*t/r1;//(E-(e1*e1))*T*T/(r1*m*n);
+                        sus[j] += var_mag(g,m1)*t/r1;//(M-(m1*m1))*T/(r1*m*n);
+			//printf("%f %f %f %f\n", sus[j], m1, spec[j], e1);
                         if(k==0) temp[j] = T;
-                        T+=0.1;
+                        T+=0.05;
                         init_grid(g,c,gsl_mt);
 		}
+		//if(k==0 && r1==1){
+		//	autocorrelation(mag, autocorr, r2);
+		//}
 	}
 	}
 	//Save observables and free memory
@@ -179,7 +235,9 @@ int main(int argc, char *argv[]){
         if(hex==1 && c==0) snprintf(title, 100, "stats_hexagonal_serial_hot.txt");
         if(triangle==1 && c==0) snprintf(title, 100, "stats_triangular_serial_hot.txt");
         if(sq==1 && c==0) snprintf(title, 100, "stats_square_serial_hot.txt");
-	write_stats(title,mag,enrgy,sus,spec,temp,r2);
+//	snprintf(title, 100, "Autocorrelations.txt");
+//	write_stats(title,mag,enrgy,sus,spec,temp,r2);
+//	write_stats_autocorr(title, temp, autocorr, r2);
 	free(mag);
 	free(enrgy);
 	free(temp);
@@ -215,12 +273,15 @@ void init_grid(int g[m][n], int c, gsl_rng *gsl_mt){
 void metropolis_sweep(int g[m][n], const double J, double T, gsl_rng *gsl_mt){
 	int i,j;
 	double dE;
-	for(int k=0; k<m*n; k++){
-		i=gsl_rng_uniform_int(gsl_mt, m);
-		j=gsl_rng_uniform_int(gsl_mt, n);
+	for(i=0; i<m; i++){
+		for(j=0; j<n; j++){
+	//for(int k=0; k<m*n; k++){
+		//i=gsl_rng_uniform_int(gsl_mt, m);
+		//j=gsl_rng_uniform_int(gsl_mt, n);
 		dE = 2.0*J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
 		if(dE<=0) g[i][j] *=-1;
 		else{ if(gsl_rng_uniform(gsl_mt)<(exp(-dE*T))) g[i][j] *=-1; }
+		}
 	}
 }
 
@@ -268,6 +329,21 @@ double energy(int g[m][n], const double J){
 	}
 return E/(2.0*m*n);
 }
+
+double var_enrg(int g[m][n], double J, double avg){
+	int i,j;
+	double dE;
+	double var=0;
+	for(i=0; i<m; i++){
+		for(j=0; j<n; j++){
+			dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)]);
+			dE/=2.0;
+			var += (dE - avg)*(dE - avg);
+		}
+	}
+return var/(m*n);
+}
+
 //Calculate the energy per site of the system
 double energy2(int g[m][n], const double J){
         int i,j;
@@ -279,7 +355,7 @@ double energy2(int g[m][n], const double J){
 			E+=dE*dE;
                 }
         }
-return E/(2.0*m*n*m*n);
+return E/(2.0); // *m*n*m*n);
 }
 
 //Calculate the energy per site of the system
@@ -293,6 +369,34 @@ double energy_triangular(int g[m][n], const double J){
         }
 return E/(2.0*m*n);
 }
+
+double var_enrg_tri(int g[m][n], double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+			dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/(m*n);
+}
+
+double var_mag(int g[m][n], double avg){
+	int i,j;
+	//double dM;
+	double var=0;
+	for(i=0; i<m; i++){
+		for(j=0; j<n; j++){
+			//dM = g[i][j]-avg;
+			var += (g[i][j] - avg)*(g[i][j] - avg);
+		}
+	}
+return var/(m*n);
+}
+
 
 //Calculate the energy per site of the system
 double energy_triangular2(int g[m][n], const double J){
@@ -320,6 +424,20 @@ double energy_hexagonal(int g[m][n], const double J){
                 }
         }
 return E/(2.0*m*n);
+}
+
+double var_enrg_hex(int g[m][n], double J, double avg){
+        int i,j;
+        double dE;
+        double var=0;
+        for(i=0; i<m; i++){
+                for(j=0; j<n; j++){
+			dE=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
+                        dE/=2.0;
+                        var += (dE - avg)*(dE - avg);
+                }
+        }
+return var/(m*n);
 }
 
 //Calculate the energy per site of the system
@@ -389,8 +507,119 @@ void write_stats(char *title, double *mag, double *energy, double *sus, double *
 	fclose(fp);
 }
 
+void write_stats_autocorr(char *title, double *autocorr, int r2){
+	FILE *fp = fopen(title, "w");
+	for(int i=0; i<r2; i++){
+			fprintf(fp, "%f \n", autocorr[i]);
+	}
+	fclose(fp);
+}
+
+void save_configuration(char *title, int g[m][n]){
+	FILE *fp = fopen(title, "w");
+	int i,j;
+	for(i=0; i<m; i++){
+		for(j=0; j<n; j++){
+			fprintf(fp, "%d ", g[i][j]);
+		}
+		fprintf(fp, "\n");
+	}
+}
+
 int modulo(int a, int b){
 	int r = a%b;
 	if(r<0) r+=b;
 return r;
 }
+
+/*void autocorrelation(double *x, double *autocorr, int size){
+	//double autocorr[size];
+	double sum;
+	int i,j;
+	for(i=0; i<size; i++){
+		for(j=0; j<size-i; j++){
+			sum+=x[j]*x[j-1];
+		}
+		autocorr[i]=sum;
+	}
+}
+*/
+
+double autocorrelation(int t, int N, double *x){
+	double sum=0;
+	double x1=0;
+	double x2=0;
+	double x3=0;
+/*	for(int i=0; i<=(N-k-1); i++){
+		x1+=x[i];
+	}
+	for(int j=0; j<=(N-k-1); j++){
+		sum+= x[k+j]*(x[j] - (1/(N-k))*x1);
+	}
+*/
+	//for(int k=0; k<N; k++){
+	//	if(x[k]>1) printf("%f\n", x[k]);
+	//}
+	//for(int i=0; i<(N-t); i++){
+		//printf("%f %f\n", x[i], x[i-1]);
+	//	x1+=x[i]*x[i-1];//*x[i+t];
+	//}
+	//x1/=(N-t);
+	//for(int j=0; j<N; j++){
+		//printf("%f\n",x[j]);
+	//	x2+=x[j];
+	//}
+	//x2/=N;
+	//for(int i=0; i<(N-t); i++){
+	//	x1+=(x[i])*(x[i+t]);
+	//}
+	//x1/=(N-t);
+/*	for(int j=0; j<(N-t); j++){
+		x2+=x[j];
+		x3+=x[j+t];
+	}
+	x2/=(N-t);
+	x3/=(N-t);
+	for(int i=0; i<(N-t); i++){
+		x1+=(x[i] - x2) * (x[i+t] - x3);
+	}
+	x1/=(N-t);
+	//x2/=(N-t);
+*/	//x3/=(N-t);
+/*	for(int i=0; i<(N-t); i++){
+		x1+=x[i]*x[i+t];
+	}
+	x1/=N;
+	for(int j=0; j<N; j++){
+		x2+=x[j]/N;
+	}
+*/
+
+
+// Works
+	for(int i=0; i<(N-t-1); i++){
+		x2+=x[i];
+	}
+	x2/=(N-t-1);
+	for(int j=0; j<(N-t-1); j++){
+		x1 += x[j+t]*(x[j] - x2);
+	}
+	x1/=(N-t);
+	//printf("%f %f %f\n", x1, x2, x3);
+	sum = x1;//(x1-(x2*x2));//(x1-(x2*x3));
+return sum;
+}
+
+/*void autocorrelation(double *x, double *autocorr, int size){
+        //double autocorr[size];
+       double sum;
+        int i,j;
+        for(i=0; i<size; i++){
+                for(j=0; j<size-i; j++){
+                        sum+=x[j]*x[j-1];
+                }
+                autocorr[i]=sum;
+        }
+
+}*/
+

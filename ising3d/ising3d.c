@@ -5,15 +5,17 @@
 #include<gsl/gsl_rng.h>
 #include<gsl/gsl_randist.h>
 
-#define x 10
-#define y 10
-#define z 10
+#define x 20
+#define y 20
+#define z 20
 
 void init_grid(int g[x][y][z], int, gsl_rng *);
 void metropolis_sweep(int g[x][y][z], const double, double, gsl_rng *);
 double energy(int g[x][y][z], const double);
+double energy_var(int g[x][y][z], const double, double);
 double energy2(int g[x][y][z], const double);
 double magnetisation(int g[x][y][z]);
+double mag_var(int g[x][y][z], double);
 double magnetisation2(int g[x][y][z]);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 int modulo(int, int);
@@ -62,20 +64,22 @@ int main(int argc, char *argv[]){
 		T=0.00001;
 		double m2;
 		double e2;
+		double t;
 		for(int j=0; j<r2; j++){
+			t=1/T;
 			for(int k=0; k<r3; k++){
 				metropolis_sweep(g,J,T,gsl_mt);
 			}
-			double m = magnetisation(g)/r1;
-			double e = energy(g,J)/r1;
-			m2 = magnetisation2(g)/r1;
-			e2 = energy2(g,J)/r1;
-			mag[j] += m;
-			enrgy[j] += e;
+			double m = magnetisation(g);//r1;
+			double e = energy(g,J);
+			m2 = mag_var(g,m);//magnetisation2(g)/r1;
+			e2 = energy_var(g,J,e);//energy2(g,J)/r1;
+			mag[j] += m/r1;
+			enrgy[j] += e/r1;
 			//M += m*m;
 			//E += e*e;
-			spec[j] += fabs(e2-(e*e))*(T*T)/r1;
-			sus[j] += fabs(m2-(m*m))*T/r1;
+			spec[j] += e2*t*t/r1;//fabs(e2-(e*e))*(T*T)/r1;
+			sus[j] += m2*t/r1;//fabs(m2-(m*m))*T/r1;
 			if(i==0) temp[j]=T;
 			T+=0.1;
 			init_grid(g,c,gsl_mt);
@@ -149,6 +153,22 @@ double energy(int g[x][y][z], const double J){
 return E/(2.0*x*y*z);
 }
 
+double energy_var(int g[x][y][z], const double J, double avg){
+	int i,j,k;
+	double var=0;
+	double dE;
+	for(i=0; i<x; i++){
+		for(j=0; j<y; j++){
+			for(k=0; k<z; k++){
+				dE = -J*g[i][j][k]*(g[modulo(i+1,x)][j][k] + g[modulo(i-1,x)][j][k] + g[i][modulo(j+1,y)][k] +g[i][modulo(j-1,y)][k] + g[i][j][modulo(k+1,z)] + g[i][j][modulo(k-1,z)]);
+                                dE/=2.0;
+				var += (dE-avg)*(dE-avg);
+			}
+		}
+	}
+return var/(x*y*z);
+}
+
 double energy2(int g[x][y][z], const double J){
         int i,j,k;
 	double dE;
@@ -176,6 +196,19 @@ double magnetisation(int g[x][y][z]){
 		}
 	}
 return fabs(M)/(x*y*z);
+}
+
+double mag_var(int g[x][y][z], double avg){
+	int i,j,k;
+	double var=0;
+	for(i=0; i<x; i++){
+		for(j=0; j<y; j++){
+			for(k=0; k<z; k++){
+				var += (g[i][j][k] - avg)*(g[i][j][k] - avg);
+			}
+		}
+	}
+return var/(x*y*z);
 }
 
 double magnetisation2(int g[x][y][z]){
