@@ -36,7 +36,7 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	double r1 = 10.0; //Number of simulations
+	double r1 = 50.0; //Number of simulations
 	int r2 = 60; //Number of tempreatures;
 	int r3 = 1000; //Number of sweeps
 
@@ -68,18 +68,16 @@ int main(int argc, char *argv[]){
 		for(int j=0; j<r2; j++){
 			t=1/T;
 			for(int k=0; k<r3; k++){
-				metropolis_sweep(g,J,T,gsl_mt);
+				metropolis_sweep(g,J,t,gsl_mt);
 			}
-			double m = magnetisation(g);//r1;
+			double m = magnetisation(g);
 			double e = energy(g,J);
-			m2 = mag_var(g,m);//magnetisation2(g)/r1;
-			e2 = energy_var(g,J,e);//energy2(g,J)/r1;
+			m2 = mag_var(g,m);
+			e2 = energy_var(g,J,e);
 			mag[j] += m/r1;
 			enrgy[j] += e/r1;
-			//M += m*m;
-			//E += e*e;
-			spec[j] += e2*t*t/r1;//fabs(e2-(e*e))*(T*T)/r1;
-			sus[j] += m2*t/r1;//fabs(m2-(m*m))*T/r1;
+			spec[j] += e2*t*t/r1;
+			sus[j] += m2*t/r1;
 			if(i==0) temp[j]=T;
 			T+=0.1;
 			init_grid(g,c,gsl_mt);
@@ -88,7 +86,7 @@ int main(int argc, char *argv[]){
 	char title[100];
 	if(c==0) snprintf(title, 100, "stats_cube_hot.txt");
 	if(c==1) snprintf(title, 100, "stats_cube_cold.txt");
-	write_stats(title,mag,enrgy,spec,sus,temp,r2);
+	write_stats(title,mag,enrgy,sus,spec,temp,r2);
 	free(mag);
 	free(enrgy);
 	free(spec);
@@ -97,6 +95,7 @@ int main(int argc, char *argv[]){
 return 0;
 }
 
+//Initialise grid
 void init_grid(int g[x][y][z], int c, gsl_rng *gsl_mt){
 	int i,j,k;
 	if(c==1){
@@ -104,10 +103,6 @@ void init_grid(int g[x][y][z], int c, gsl_rng *gsl_mt){
 			for(j=0; j<y; j++){
 				for(k=0; k<z; k++){
 					g[i][j][k]=1;
-				/*if(drand48()<0.5) g[i][j][k]=-1;
-				else{
-					g[i][j][k]=1;
-				}*/
 				}
 			}
 		}
@@ -124,6 +119,7 @@ void init_grid(int g[x][y][z], int c, gsl_rng *gsl_mt){
 	}
 }
 
+//Cubic metropolis sweep
 void metropolis_sweep(int g[x][y][z], const double J, double T, gsl_rng *gsl_mt){
 	int i,j,k;
 	double dE;
@@ -133,13 +129,14 @@ void metropolis_sweep(int g[x][y][z], const double J, double T, gsl_rng *gsl_mt)
 				dE = 2*J*g[i][j][k]*(g[modulo(i+1,x)][j][k] + g[modulo(i-1,x)][j][k] + g[i][modulo(j+1,y)][k] +g[i][modulo(j-1,y)][k] + g[i][j][modulo(k+1,z)] + g[i][j][modulo(k-1,z)]);
 				if(dE<=0) g[i][j][k] *= -1;
 				else{
-					if(gsl_rng_uniform(gsl_mt)<(exp(-dE/T))) g[i][j][k]*=-1;
+					if(gsl_rng_uniform(gsl_mt)<(exp(-dE*T))) g[i][j][k]*=-1;
 				}
 			}
 		}
 	}
 }
 
+//average energy
 double energy(int g[x][y][z], const double J){
 	int i,j,k;
 	double E=0;
@@ -153,6 +150,7 @@ double energy(int g[x][y][z], const double J){
 return E/(2.0*x*y*z);
 }
 
+//average energy variance
 double energy_var(int g[x][y][z], const double J, double avg){
 	int i,j,k;
 	double var=0;
@@ -169,22 +167,7 @@ double energy_var(int g[x][y][z], const double J, double avg){
 return var/(x*y*z);
 }
 
-double energy2(int g[x][y][z], const double J){
-        int i,j,k;
-	double dE;
-        double E=0;
-        for(i=0; i<x; i++){
-                for(j=0; j<y; j++){
-                        for(k=0; k<z; k++){
-                                dE = -J*g[i][j][k]*(g[modulo(i+1,x)][j][k] + g[modulo(i-1,x)][j][k] + g[i][modulo(j+1,y)][k] +g[i][modulo(j-1,y)][k] + g[i][j][modulo(k+1,z)] + g[i][j][modulo(k-1,z)]);
-				E+=dE*dE;
-                        }
-                }
-        }
-return E/(2.0*x*y*z*x*y*z);
-}
-
-
+//average magnetisation
 double magnetisation(int g[x][y][z]){
 	int i,j,k;
 	double M=0;
@@ -198,6 +181,7 @@ double magnetisation(int g[x][y][z]){
 return fabs(M)/(x*y*z);
 }
 
+//average magnetisation variance
 double mag_var(int g[x][y][z], double avg){
 	int i,j,k;
 	double var=0;
@@ -211,20 +195,6 @@ double mag_var(int g[x][y][z], double avg){
 return var/(x*y*z);
 }
 
-double magnetisation2(int g[x][y][z]){
-        int i,j,k;
-        double M=0;
-        for(i=0; i<x; i++){
-                for(j=0; j<y; j++){
-                        for(k=0; k<z; k++){
-                                M+=g[i][j][k]*g[i][j][k];
-                        }
-                }
-        }
-return fabs(M)/(x*y*z*x*y*z);
-}
-
-
 void write_stats(char *title, double *mag, double *energy, double *sus, double *spec, double *T, int r2){
 	FILE *fp = fopen(title, "w");
 	for(int i=0; i<r2; i++){
@@ -233,6 +203,7 @@ void write_stats(char *title, double *mag, double *energy, double *sus, double *
 	fclose(fp);
 }
 
+//modulo function
 int modulo(int a, int b){
 	int r=a%b;
 	if(r<0) r+=b;
