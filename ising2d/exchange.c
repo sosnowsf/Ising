@@ -4,16 +4,14 @@
 void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
         MPI_Request reqs[4];
 
-/*      MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[0]);
-        MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[1]);
-        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[2]);
-        MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
-*/
         MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[0]);
-        MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[1]);
+        MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 1, comm, &reqs[1]);
         MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[2]);
-        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[3]);
+        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 1, comm, &reqs[3]);
 
+//	Alternative blocking exchange function - used for testing
+//	MPI_Sendrecv(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, &g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, MPI_STATUS_IGNORE);
+//	MPI_Sendrecv(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 1, &g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 1, comm, MPI_STATUS_IGNORE);
 
         MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
 }
@@ -88,8 +86,8 @@ void exchange2(int g[m][n], int s, int e, int nbrtop, int nbrbot, int rank, int 
                         MPI_Send(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm);
                 }
                 if(rank%2==1){
-                        MPI_Recv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrtop, 0, comm, MPI_STATUS_IGNORE);
-                        MPI_Recv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrbot, 0, comm, MPI_STATUS_IGNORE);
+                        MPI_Recv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, MPI_STATUS_IGNORE);
+                        MPI_Recv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, MPI_STATUS_IGNORE);
                 }
         }
         if(turn%2==1){

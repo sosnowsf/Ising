@@ -1,6 +1,6 @@
 #include"metropolis.h"
 
-//Sweep through the lattice using the metropolis algorithm
+//Sweep through the square lattice using the metropolis algorithm
 void metropolis_sweep(int g[m][n], int s, int e, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
         double dE;
@@ -16,6 +16,7 @@ void metropolis_sweep(int g[m][n], int s, int e, const double J, double T, gsl_r
         }
 }
 
+//2D decomposition version of above function
 void metropolis_sweep2d(int g[m][n], int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
         double dE;
@@ -31,6 +32,7 @@ void metropolis_sweep2d(int g[m][n], int s, int e, int s2, int e2, const double 
         }
 }
 
+//Triangular lattice metropolis sweep
 void metropolis_sweep_triangular(int g[m][n], int s, int e, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
         double dE;
@@ -46,6 +48,7 @@ void metropolis_sweep_triangular(int g[m][n], int s, int e, const double J, doub
         }
 }
 
+//2D decomp version of above function
 void metropolis_sweep_triangular2d(int g[m][n], int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
         double dE;
@@ -61,7 +64,7 @@ void metropolis_sweep_triangular2d(int g[m][n], int s, int e, int s2, int e2, co
         }
 }
 
-
+//Hex lattice metropolis sweep
 void metropolis_sweep_hexagonal(int g[m][n], int s, int e, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
         double dE;
@@ -77,6 +80,7 @@ void metropolis_sweep_hexagonal(int g[m][n], int s, int e, const double J, doubl
         }
 }
 
+//2D decomp version of above function
 void metropolis_sweep_hexagonal2d(int g[m][n], int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
         int i,j;
         double dE;

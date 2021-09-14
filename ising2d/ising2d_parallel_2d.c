@@ -20,11 +20,10 @@ int main(int argc, char **argv){
 	//const double k = pow(1.38064852, -23); //Boltzmann constant
 	int c=0;
 
-	double r1 = 50.0;//50.0; //Number of simulations
+	double r1 = 50.0; //Number of simulations
 	int r2 = 100; //Number of temperatures
 	int r3 = 1000; //Number of sweeps
 
-	//Seed prng and inititate grid
 	//Seed prng and initiate grid
 	gsl_rng *gsl_mt = gsl_rng_alloc(gsl_rng_mt19937);
 	unsigned long seed = 1999;
@@ -33,6 +32,7 @@ int main(int argc, char **argv){
 	//srand48(seed);
 
 	int g[m][n]; //define grid
+
 	//int G[m][n];
 	//init_grid(g,c,gsl_mt);
 	//reset_grid(G,g);
@@ -111,7 +111,6 @@ int main(int argc, char **argv){
 
 	if((rank%ddims2[0])==0) nbrleft = (nbrleft+ddims2[0])%size;
 	if((rank%ddims2[0])==(ddims2[0]-1)) nbrright = modulo(nbrright-ddims2[0],size);
-	//printf("%d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot);
 
 	decomp1d(m, ddims2[0], rank%ddims2[0], &s2, &e2); //Decompose cols
 	decomp1d(n, ddims2[1], (rank-(rank%ddims2[0]))/ddims2[0], &s, &e); //Decompose rows
@@ -123,7 +122,6 @@ int main(int argc, char **argv){
 	gsl_rng_set(gsl_mt, seed2);
 	//srand48(seed*rank+1);
 	
-	//printf("%d %d %d %d %d\n", rank, s, e, nbrtop, nbrbot);
 
 	//Allocate memory to store the required stats
 	double *magnetisations, *energies, *specs, *sus, *temps;
@@ -145,21 +143,15 @@ int main(int argc, char **argv){
 			for(int i=0; i<r3; i++){
 				metropolis_sweep2d(g,s,e,s2,e2,J,t,gsl_mt);
 				exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
-				/*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
-				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-				MPI_Barrier(MPI_COMM_WORLD);
-				if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
-				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-				MPI_Barrier(MPI_COMM_WORLD);*/
 				//if(rank%2==i%2) metropolis_sweep(g,s,e,J,T,k);
 				//exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
 			}
-			//calculate the magnetisation per site for each process then get the average on the root process
+			//calculate the observables for each process then get the average on the root process
 			double mag, enrg, mag2, enrg2;
 			double M = magnetisation2d(g,s,e,s2,e2);
 			double E = energy2d(g,J,s,e,s2,e2);
-			double M2 = var_mag2d(g,s,e,s2,e2,M);//magnetisation2(g,s,e);
-			double E2 = var_enrg2d(g,s,e,s2,e2,J,E);//energy2(g,J,s,e); 
+			double M2 = var_mag2d(g,s,e,s2,e2,M);
+			double E2 = var_enrg2d(g,s,e,s2,e2,J,E); 
 			MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -171,13 +163,12 @@ int main(int argc, char **argv){
 				enrg2/=size;
 				magnetisations[j]+=mag/r1;
 				energies[j]+=enrg/r1;
-				specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
-				sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
+				specs[j] += enrg2*t*t/r1;
+				sus[j] += mag2*t/r1;/
 				if(k==0) temps[j] = T;
 			}
 			T+=0.05;
 			//Reset grid to original arrangement
-			//reset_grid(G,g);
 			init_grid(g,c,gsl_mt);
 			exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
 		}
@@ -201,21 +192,17 @@ int main(int argc, char **argv){
                         for(int i=0; i<r3; i++){
                                 metropolis_sweep_triangular2d(g,s,e,s2,e2,J,t,gsl_mt);
                                 exchange2d_tri(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,nbrd1,nbrd2,nbrd3,nbrd4,MPI_COMM_WORLD);
-                                /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);
-                                if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);*/
+
+
                                 //if(rank%2==i%2) metropolis_sweep_triangular(g,s,e,J,T,k);
                                 //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
-                        //calculate the magnetisation per site for each process then get the average on the root process
+                        //calculate the observables for each process then get the average on the root process
                         double mag, enrg, mag2, enrg2;
                         double M = magnetisation2d(g,s,e,s2,e2);
                         double E = energy_triangular2d(g,J,s,e,s2,e2);
-			double M2 = var_mag2d(g,s,e,s2,e2,M);//magnetisation2(g,s,e);
-			double E2 = var_enrg_tri2d(g,s,e,s2,e2,J,E);//energy_triangular2(g,J,s,e);
+			double M2 = var_mag2d(g,s,e,s2,e2,M);
+			double E2 = var_enrg_tri2d(g,s,e,s2,e2,J,E);
                         MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -227,13 +214,12 @@ int main(int argc, char **argv){
 				enrg2/=size;
                                 magnetisations[j]+=mag/r1;
                                 energies[j]+=enrg/r1;
-                                specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
-                                sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
+                                specs[j] += enrg2*t*t/r1;
+                                sus[j] += mag2*t/r1;
                                 if(k==0) temps[j] = T;
                         }
                         T+=0.07;
                         //Reset grid to original arrangement
-                        //reset_grid(G,g);
                         init_grid(g,c,gsl_mt);
 			exchange2d_tri(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,nbrd1,nbrd2,nbrd3,nbrd4,MPI_COMM_WORLD);
                 }
@@ -249,21 +235,16 @@ int main(int argc, char **argv){
                         for(int i=0; i<r3; i++){
                                 metropolis_sweep_hexagonal2d(g,s,e,s2,e2,J,t,gsl_mt);
                                 exchange2d(g,s,e,s2,e2,nbrtop,nbrbot,nbrleft,nbrright,MPI_COMM_WORLD);
-                                /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);
-                                if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);*/
-                                //if(rank%2==i%2) metropolis_sweep_hexagonal(g,s,e,J,T,k);
+                                
+				//if(rank%2==i%2) metropolis_sweep_hexagonal(g,s,e,J,T,k);
                                 //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
-                        //calculate the magnetisation per site for each process then get the average on the root process
+                        //calculate the observables for each process then get the average on the root process
                         double mag, enrg, mag2, enrg2;
                         double M = magnetisation2d(g,s,e,s2,e2);
                         double E = energy_hexagonal2d(g,J,s,e,s2,e2);
-			double M2 = var_mag2d(g,s,e,s2,e2,M);//magnetisation2(g,s,e);
-			double E2 = var_enrg_hex2d(g,s,e,s2,e2,J,E);//energy_hexagonal2(g,J,s,e);
+			double M2 = var_mag2d(g,s,e,s2,e2,M);
+			double E2 = var_enrg_hex2d(g,s,e,s2,e2,J,E);
                         MPI_Reduce(&M, &mag, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
                         MPI_Reduce(&E, &enrg, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M2, &mag2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -275,8 +256,8 @@ int main(int argc, char **argv){
 				enrg2/=size;
                                 magnetisations[j]+=mag/r1;
                                 energies[j]+=enrg/r1;
-                                specs[j] += enrg2*t*t/r1;//fabs(E2 - ((enrg)*(enrg)))*T*T/r1;
-                                sus[j] += mag2*t/r1;//fabs(M2 - ((mag)*(mag)))*T/r1;
+                                specs[j] += enrg2*t*t/r1;
+                                sus[j] += mag2*t/r1;
                                 if(k==0) temps[j] = T;
                         }
                         T+=0.05;
@@ -336,21 +317,18 @@ int main(int argc, char **argv){
 return 0;
 }
 
-//Initialise grid for random start
+//Initialise grid for cold and hot starts
 void init_grid(int g[m][n], int c, gsl_rng *gsl_mt){
 	int i,j;
+	//hot start
 	if(c==1){
 		for(i=0; i<m; i++){
 			for(j=0; j<n; j++){
-				/*double U = drand48();
-				if(U<0.5) g[i][j]=-1;
-				else{ 
-					g[i][j]=1;
-				}*/
 				g[i][j]=1;
 			}
 		}
 	}
+	//cold start
 	if(c==0){
 		for(i=0; i<m; i++){
 			for(j=0; j<n; j++){
@@ -396,6 +374,7 @@ void print_in_order(int g[m][n], MPI_Comm comm)
   }
 }
 
+//write stats to file
 void write_stats(char *title, double *mag, double *energy, double *specs, double *sus, double *T, int r1){
 	FILE *fp = fopen(title, "w");
 	for(int i=0; i<r1; i++){
@@ -413,6 +392,7 @@ void reset_grid(int G[m][n], int g[m][n]){
 	}
 }
 
+//grid initiations for testing code
 void init_grid2(int g[m][n], int s, int e){
 	for(int i=s; i<=e; i++){
 		for(int j=0; j<n; j++){

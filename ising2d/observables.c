@@ -23,6 +23,7 @@ double energy2d(int g[m][n], const double J, int s, int e, int s2, int e2){
 return E/(2.0*(e-s+1)*(e2-s2+1));
 }
 
+//Average energy variance
 double var_enrg(int g[m][n], int s, int e, double J, double avg){
         int i,j;
         double dE;
@@ -51,7 +52,7 @@ double var_enrg2d(int g[m][n], int s, int e, int s2, int e2, double J, double av
 return var/((e-s+1)*(e2-s2+1));
 }
 
-
+//Triangular average energy
 double energy_triangular(int g[m][n], const double J, int s, int e){
         int i,j;
         double E=0;
@@ -74,7 +75,7 @@ double energy_triangular2d(int g[m][n], const double J, int s, int e, int s2, in
 return E/(2.0*(e-s+1)*(e2-s2+1));
 }
 
-
+//Average energy variance for triangular lattice 
 double var_enrg_tri(int g[m][n], int s, int e, double J, double avg){
         int i,j;
         double dE;
@@ -104,6 +105,7 @@ return var/((e-s+1)*(e2-s2+1));
 }
 
 
+//Average enrgy hexagonal lattice
 double energy_hexagonal(int g[m][n], const double J, int s, int e){
         int i,j;
         double E=0;
@@ -126,6 +128,7 @@ double energy_hexagonal2d(int g[m][n], const double J, int s, int e, int s2, int
 return E/(2.0*(e-s+1)*(e2-s2+1));
 }
 
+//Average energy variance hex lattice
 double var_enrg_hex(int g[m][n], int s, int e, double J, double avg){
         int i,j;
         double dE;
@@ -179,6 +182,7 @@ double magnetisation2d(int g[m][n], int s, int e, int s2, int e2){
 return fabs(M/((e-s+1)*(e2-s2+1)));
 }
 
+//average magnetisation variance 
 double var_mag(int g[m][n], int s, int e, double avg){
         int i,j;
         //double dM;
