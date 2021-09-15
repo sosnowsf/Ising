@@ -10,7 +10,9 @@ void init_grid(int g[x][y][z], int, gsl_rng *);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[x][y][z], int g[x][y][z]);
 void init_grid2(int g[x][y][z], int, int);
-void init_grid2d2(int g[x][y][z], int, int, int, int);
+void init_grid2_2d(int g[x][y][z], int, int, int, int);
+void init_grid2_3d(int g[x][y][z], int, int, int, int, int, int);
+//void init_grid2d2(int g[x][y][z], int, int, int, int);
 
 int main(int argc, char **argv){
 	int rank, size, s, e, s2, e2, s3, e3, nbrtop, nbrbot, nbrleft, nbrright, nbrfront, nbrback; //variables needed for parallelisation
@@ -153,15 +155,16 @@ int main(int argc, char **argv){
 	}
 
         //Test MPI-IO
-   //     print_matrix(g);
-        //save_grid(g,s,e);
-   //     MPI_Barrier(MPI_COMM_WORLD);
-       // init_grid2(g,0,x-1);//s,e);
-   //     print_matrix(g);
-       // load_grid(g,s,e);
-   //     MPI_Barrier(MPI_COMM_WORLD);
-   //     print_matrix(g);
-
+/*	init_grid2(g,s,e);
+	printf("%d %f\n", rank, magnetisation(g,s,e));
+	save_grid(g,s,e);
+	init_grid(g,1,gsl_mt);
+	printf("%d %f\n", rank, magnetisation(g,s,e));
+	MPI_Barrier(MPI_COMM_WORLD);
+	load_grid(g,s,e);
+	printf("%d %f\n", rank, magnetisation(g,s,e));
+*/
+	
 
 	if(rank==0){
 		char title[100];
@@ -257,6 +260,16 @@ int main(int argc, char **argv){
                 write_stats(title,mag,eng,specs,sus,temps,r2);
         }
 
+        //Test MPI-IO
+/*        init_grid2_2d(g,s,e,s2,e2);
+        printf("%d %f\n", rank, magnetisation2d(g,s,e,s2,e2));
+        save_grid2d(g,s,e,s2,e2);
+        init_grid(g,1,gsl_mt);
+        printf("%d %f\n", rank, magnetisation2d(g,s,e,s2,e2));
+        MPI_Barrier(MPI_COMM_WORLD);
+        load_grid2d(g,s,e,s2,e2);
+        printf("%d %f\n", rank, magnetisation2d(g,s,e,s2,e2));
+*/
 
 	}
 
@@ -379,7 +392,17 @@ int main(int argc, char **argv){
                 if(c==1) snprintf(title, 100, "stats_cube_parallel_cold_3d.txt");
                 write_stats(title,mag,eng,specs,sus,temps,r2);
         }
-
+/*
+        //Test MPI-IO
+        init_grid2_3d(g,s,e,s2,e2,s3,e3);
+        printf("%d %f\n", rank, magnetisation3d(g,s,e,s2,e2,s3,e3));
+        save_grid3d(g,s,e,s2,e2,s3,e3);
+        init_grid(g,1,gsl_mt);
+        printf("%d %f\n", rank, magnetisation3d(g,s,e,s2,e2,s3,e3));
+        MPI_Barrier(MPI_COMM_WORLD);
+        load_grid3d(g,s,e,s2,e2,s3,e3);
+        printf("%d %f\n", rank, magnetisation3d(g,s,e,s2,e2,s3,e3));
+*/
 
 	}
 
@@ -436,9 +459,32 @@ void init_grid2(int g[x][y][z], int s, int e){
 	int i,j,k;
 	for(i=s; i<=e; i++){
 		for(j=0; j<y; j++){
-			for(k=0 ;k<z; k++){
+			for(k=0; k<z; k++){
 				g[i][j][k]= i*y*z + j*z + k;
 			}
 		}
 	}
 }
+
+void init_grid2_2d(int g[x][y][z], int s, int e, int s2, int e2){
+        int i,j,k;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        for(k=0; k<z; k++){
+                                g[i][j][k]= i*y*z + j*z + k;
+                        }
+                }
+        }
+}
+
+void init_grid2_3d(int g[x][y][z], int s, int e, int s2, int e2, int s3, int e3){
+        int i,j,k;
+        for(i=s; i<=e; i++){
+                for(j=s2; j<=e2; j++){
+                        for(k=s3; k<=e3; k++){
+                                g[i][j][k]= i*y*z + j*z + k;
+                        }
+                }
+        }
+}
+
