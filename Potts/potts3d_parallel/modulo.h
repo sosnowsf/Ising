@@ -1,0 +1,2 @@
+int modulo(int, int);
+
