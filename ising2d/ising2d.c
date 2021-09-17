@@ -29,7 +29,6 @@ double var_mag(int g[m][n], double);
 double var_enrg(int g[m][n], double, double);
 double var_enrg_tri(int g[m][n], double, double);
 double var_enrg_hex(int g[m][n], double, double);
-//void autocorrelation(double *, double *, int);
 void write_stats_autocorr(char *title, double *autocorr, int r2);
 double autocorrelation(int k, int N, double *x);
 
@@ -75,7 +74,7 @@ int main(int argc, char *argv[]){
 	
 	double r1 = 50.0; //Number of times simulation is ran to ge the average
 	int r2 = 100; //Number of temperatures
-	int r3 = 1000; //Number of sweeps
+	int r3 = 1000;//1000; //Number of sweeps
 
 	//int seed = 1997;
 	//srand48(seed);
@@ -153,11 +152,11 @@ int main(int argc, char *argv[]){
                         for(int i=0; i<r3; i++){
                                 metropolis_sweep_hexagonal(g,J,t,gsl_mt);
                         }
-                        if(k==0){
+                        /*if(k==0){
                                 char title2[100];
                                 snprintf(title2, 100, "final_configuration.txt");
                                 save_configuration(title2,g);
-                        }
+                        }*/
                         double m1 = magnetisation(g);
                         double e1 = energy_hexagonal(g,J);
                         mag[j] += m1/r1;
@@ -190,14 +189,16 @@ int main(int argc, char *argv[]){
 				
 			}
 			//Autocorrelation code for different temperatures
-			/*if(k==0 && (T==0.000100 || T==2.2501 || T==4.5001)){
-				char title[100];
-				snprintf(title, 100, "Autocorrelations_T%f.txt", T);
-				write_stats_autocorr(title, autocorr, r3);
+			//if(k==0 && (T==2.2501 || T==4.2501)){
+			if(k==0){
+				//char title[100];
+				//snprintf(title, 100, "Autocorrelations_T%f.txt", T);
+				//write_stats_autocorr(title, autocorr, r3);
+				printf("%f\n", T);
 				char title2[100];
 				snprintf(title2, 100, "final_configuration_T%f.txt", T);
 				save_configuration(title2,g);
-			}*/
+			}
                         double m1 = magnetisation(g);
                         double e1 = energy(g,J);
                         mag[j] += m1/r1;

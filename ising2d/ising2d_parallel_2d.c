@@ -164,7 +164,7 @@ int main(int argc, char **argv){
 				magnetisations[j]+=mag/r1;
 				energies[j]+=enrg/r1;
 				specs[j] += enrg2*t*t/r1;
-				sus[j] += mag2*t/r1;/
+				sus[j] += mag2*t/r1;
 				if(k==0) temps[j] = T;
 			}
 			T+=0.05;
