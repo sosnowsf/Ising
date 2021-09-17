@@ -314,25 +314,15 @@ int main(int argc, char **argv){
 	if(nbrtop < r) nbrtop = modulo(nbrtop+ddims3[1]*ddims3[2],size);
 	if(nbrbot >= (r+(ddims3[1]*ddims3[2])) ) nbrbot -= ddims3[1]*ddims3[2];
 
-	//Find the correct front and bacj neighbours
-	
-	
-	//if((rank+ddims3[2]) > ((rank - rank%(ddims3[1]*ddims3[2]+1))+(ddims3[1]*ddims3[2])) )  nbrbot = modulo(rank+ddims3[2],(rank+1 - rank%(ddims3[1]*ddims3[2]))*(ddims3[1]*ddims3[2]));//nbrtop = (nbrleft+ddims3[2])%(size) ;
-	//if((rank-ddims3[2]) < (rank - rank%(ddims3[1]*ddims3[2])) )  nbrtop = modulo(rank-ddims3[2], (rank+1 - rank%(ddims3[1]*ddims3[2]))*(ddims3[1]*ddims3[2]));
-
         //printf("%d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot);
 
-        //decomp1d(z, ddims3[1]*ddims3[2], rank%(ddims3[1]*ddims3[2]), &s3, &e3); //Decompose cols
-        //decomp1d(x, ddims3[1], (rank-(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2]), &s, &e); //Decompose rows
-	//decomp1d(y, ddims3[2], rank%ddims3[2], &s2, &e2);
 	
-	decomp1d(y, ddims3[1], rank%ddims3[1], &s, &e); //Decompose along y axis
-	decomp1d(z, ddims3[2], ((rank-rank%ddims3[2])/ddims3[2])%ddims3[2], &s2, &e2); //Decompose along z axis
-	decomp1d(x, ddims3[0], /*rank%ddims3[0]*/((rank-rank%(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2])), &s3, &e3); //Decompose along x axis
+	decomp1d(z, ddims3[2], rank%ddims3[2], &s, &e); //Decompose along y axis
+	decomp1d(y, ddims3[1], ((rank-rank%ddims3[2])/ddims3[2])%ddims3[2], &s2, &e2); //Decompose along z axis
+	decomp1d(z, ddims3[0], ((rank-rank%(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2])), &s3, &e3); //Decompose along x axis
 
 	//printf("%d\n", ((rank-rank%(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2])));
 
-	//decomp1d(x, ddims2[1], (rank-(rank%ddims2[0]))/ddims2[0], &s, &e); //Decompose rows
 
         printf("%d %d %d %d %d %d %d %d %d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot, nbrfront, nbrback, s, e, s2, e2, s3, e3);
 

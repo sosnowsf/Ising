@@ -13,7 +13,7 @@ void exchange(int g[x][y][z], int s, int e, int nbrtop, int nbrbot, MPI_Comm com
         MPI_Isend(&g[modulo(s,x)][0][0], 1, slice, nbrtop, 0, comm, &reqs[2]);
         MPI_Isend(&g[modulo(e,x)][0][0], 1, slice, nbrbot, 1, comm, &reqs[3]);
 
-
+//	Alternative exchange
 //      MPI_Irecv(&g[modulo(s-1,x)][0][0], 100, MPI_INT, nbrtop, 0, comm, &reqs[0]);
 //      MPI_Irecv(&g[modulo(e+1,x)][0][0], 100, MPI_INT, nbrbot, 0, comm, &reqs[1]);
 //      MPI_Isend(&g[modulo(e,x)][0][0], 100, MPI_INT, nbrbot, 0, comm, &reqs[2]);
