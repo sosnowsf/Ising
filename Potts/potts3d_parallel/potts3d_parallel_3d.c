@@ -103,9 +103,9 @@ int main(int argc, char **argv){
 
 	
 	
-	decomp1d(y, ddims3[1], rank%ddims3[1], &s, &e); //Decompose along y axis
-	decomp1d(z, ddims3[2], ((rank-rank%ddims3[2])/ddims3[2])%ddims3[2], &s2, &e2); //Decompose along z axis
-	decomp1d(x, ddims3[0], ((rank-rank%(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2])), &s3, &e3); //Decompose along x axis
+	decomp1d(x, ddims3[2], rank%ddims3[2], &s, &e); //Decompose along y axis
+	decomp1d(y, ddims3[1], ((rank-rank%ddims3[2])/ddims3[2])%ddims3[2], &s2, &e2); //Decompose along z axis
+	decomp1d(z, ddims3[0], ((rank-rank%(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2])), &s3, &e3); //Decompose along x axis
 
 
         printf("%d %d %d %d %d %d %d %d %d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot, nbrfront, nbrback, s, e, s2, e2, s3, e3);
