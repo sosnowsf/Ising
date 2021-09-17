@@ -3,7 +3,6 @@
 #include"hamiltonian.h"
 
 double energy(int g[x][y][z], const double);
-double energy2(int g[x][y][z], const double);
+double var_enrg(int g[x][y][z], const double, double);
 double magnetisation(int g[x][y][z]);
-double magnetisation2(int g[x][y][z]);
-
+double var_mag(int g[x][y][z], double);

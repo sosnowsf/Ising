@@ -1,14 +1,3 @@
-/*#include<stdio.h>
-#include<stdlib.h>
-#include<math.h>
-#include<unistd.h>
-#include<gsl/gsl_rng.h>
-#include<gsl/gsl_randist.h>
-
-#define x 10
-#define y 10
-#define z 10
-*/
 #include"grid_size.h"
 #include"metropolis.h"
 #include"observables.h"
@@ -16,22 +5,12 @@
 #include"hamiltonian.h"
 
 void init_grid(int g[x][y][z], int, int, gsl_rng *);
-//void metropolis_sweep(int g[x][y][z], int, const double, double, gsl_rng *);
-/*
-double energy(int g[x][y][z], const double);
-double energy2(int g[x][y][z], const double);
-double magnetisation(int g[x][y][z]);
-double magnetisation2(int g[x][y][z]);
-*/
 void write_stats(char *, double *, double *, double *, double *, double *, int);
-//int modulo(int, int);
-//int delta(int, int);
-//int H(int, int);
 
 int main(int argc, char **argv){
 	double T; //Temperature
 	const double J = 1.0; //Coupling Temperature
-	int spin=3;	
+	int spin=2;	
 	double r1 = 50.0; //Number of simulations
 	int r2 = 100; //Number of tempreatures;
 	int r3 = 1000; //Number of sweeps
@@ -72,22 +51,26 @@ int main(int argc, char **argv){
 	for(int i=0; i<r1; i++){
 		//Reset variables;
 		T=0.00001;
-		double M=0.0;
-		double E=0.0;
+		//double M=0.0;
+		//double E=0.0;
+		double t;
 		for(int j=0; j<r2; j++){
+			t=1/T;
 			for(int k=0; k<r3; k++){
 				metropolis_sweep(g,spin,J,T,gsl_mt);
 			}
-			double m = magnetisation(g)/r1;
-			double e = energy(g,J)/r1;
-			mag[j] += m;
-			enrgy[j] += e;
-			M = magnetisation2(g)/r1;
-			E = energy2(g,J)/r1;
-			spec[j] += fabs(E-(e*e))*(T*T)/r1;
-			sus[j] += fabs(M-(m*m))*T/r1;
+			double m = magnetisation(g);
+			double e = energy(g,J);
+			double m2 = var_mag(g,m);
+			double e2 = var_enrg(g,J,e);
+			mag[j] += m/r1;
+			enrgy[j] += e/r1;
+			//M = magnetisation2(g)/r1;
+			//E = energy2(g,J)/r1;
+			spec[j] += e2*t*t/r1;//fabs(E-(e*e))*(T*T)/r1;
+			sus[j] += m2*t/r1;//fabs(M-(m*m))*T/r1;
 			if(i==0) temp[j]=T;
-			T+=0.05;
+			T+=0.06;
 			init_grid(g,c,spin,gsl_mt);
 		}
 	}
@@ -128,80 +111,6 @@ void init_grid(int g[x][y][z], int c, int s, gsl_rng *gsl_mt){
 		}
 	}
 }
-/*
-void metropolis_sweep(int g[x][y][z], int s, const double J, double T, gsl_rng *gsl_mt){
-	int i,j,k,r;
-	double dE;
-	for(i=0; i<x; i++){
-		for(j=0; j<y; j++){
-			for(k=0; k<z; k++){
-				r=gsl_rng_uniform_int(gsl_mt,s)+1;
-				dE = 2.0*J*(H(r,g[modulo(i+1,x)][j][k]) + H(r,g[modulo(i-1,x)][j][k]) + H(r,g[i][modulo(j+1,y)][k]) + H(r,g[i][modulo(j-1,y)][k]) + H(r,g[i][j][modulo(k+1,z)]) + H(r,g[i][j][modulo(k-1,z)]));
-				if(dE<=0) g[i][j][k] = r;
-				else{
-					if(gsl_rng_uniform(gsl_mt)<(exp(-dE/T))) g[i][j][k] = r;
-				}
-			}
-		}
-	}
-}
-*/
-/*
-double energy(int g[x][y][z], const double J){
-	int i,j,k;
-	double E=0;
-	for(i=0; i<x; i++){
-		for(j=0; j<y; j++){
-			for(k=0; k<z; k++){
-				E += -J*(H(g[i][j][k],g[modulo(i+1,x)][j][k]) + H(g[i][j][k],g[modulo(i-1,x)][j][k]) + H(g[i][j][k],g[i][modulo(j+1,y)][k]) + H(g[i][j][k],g[i][modulo(j-1,y)][k]) + H(g[i][j][k],g[i][j][modulo(k+1,z)]) + H(g[i][j][k],g[i][j][modulo(k-1,z)]));
-			}
-		}
-	}
-return E/(2.0*x*y*z);
-}
-
-double energy2(int g[x][y][z], const double J){
-        int i,j,k;
-	double dE;
-        double E=0;
-        for(i=0; i<x; i++){
-                for(j=0; j<y; j++){
-                        for(k=0; k<z; k++){
-                                dE = -J*(H(g[i][j][k],g[modulo(i+1,x)][j][k]) + H(g[i][j][k],g[modulo(i-1,x)][j][k]) + H(g[i][j][k],g[i][modulo(j+1,y)][k]) + H(g[i][j][k],g[i][modulo(j-1,y)][k]) + H(g[i][j][k],g[i][j][modulo(k+1,z)]) + H(g[i][j][k],g[i][j][modulo(k-1,z)]));
-				E+=dE*dE;
-                        }
-                }
-        }
-return E/(2.0*x*y*z);
-}
-
-
-double magnetisation(int g[x][y][z]){
-	int i,j,k;
-	double M=0;
-	for(i=0; i<x; i++){
-		for(j=0; j<y; j++){
-			for(k=0; k<z; k++){
-				M+=g[i][j][k];
-			}
-		}
-	}
-return fabs(M)/(x*y*z);
-}
-
-double magnetisation2(int g[x][y][z]){
-        int i,j,k;
-        double M=0;
-        for(i=0; i<x; i++){
-                for(j=0; j<y; j++){
-                        for(k=0; k<z; k++){
-                                M+=g[i][j][k]*g[i][j][k];
-                        }
-                }
-        }
-return fabs(M)/(x*y*z*x*y*z);
-}
-*/
 
 void write_stats(char *title, double *mag, double *energy, double *sus, double *spec, double *T, int r2){
 	FILE *fp = fopen(title, "w");
@@ -210,20 +119,3 @@ void write_stats(char *title, double *mag, double *energy, double *sus, double *
 	}
 	fclose(fp);
 }
-/*
-int modulo(int a, int b){
-	int r=a%b;
-	if(r<0) r+=b;
-return r;
-}
-*/
-/*
-int delta(int a, int b){
-if(a==b) return 1;
-else{ return 0;}
-}
-
-int H(int a, int b){
-return 1-delta(a,b);
-}
-*/

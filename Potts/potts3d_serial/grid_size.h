@@ -5,6 +5,6 @@
 #include<gsl/gsl_rng.h>
 #include<gsl/gsl_randist.h>
 
-#define x 24
-#define y 24
-#define z 24
+#define x 20
+#define y 20
+#define z 20
