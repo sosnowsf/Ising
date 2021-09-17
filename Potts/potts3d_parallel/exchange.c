@@ -1,5 +1,6 @@
 #include"exchange.h"
 
+//1D exchange function
 void exchange(int g[x][y][z], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
         MPI_Request reqs[4];
         MPI_Datatype slice;

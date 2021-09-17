@@ -11,7 +11,7 @@ void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[x][y][z], int g[x][y][z]);
 
 int main(int argc, char **argv){
-	int rank, size, s, e, nbrtop, nbrbot; //variables needed for parallelisation
+	int rank, size, s, e, s2, e2, s3, e3, nbrtop, nbrbot, nbrleft, nbrright, nbrfront, nbrback; //variables needed for parallelisation
 	double T; //Temperature
 	const double J = 1.0; //Coupling constant
 	int spin = 2;
@@ -46,28 +46,69 @@ int main(int argc, char **argv){
 
 	//Variables for MPI Cart
 	int ndims;
-	int dims[1];
-	int periods[1];
+	//int dims[1];
+	//int periods[1];
 	int reorder;
-	int source1, source2;
+	int source1, source2, source3, source4, source5, source6;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	MPI_Comm cart;
-	ndims=1;
-	dims[0]=size;
-	periods[0]=1;
-	reorder=0;
 
-	//Create MPI_Cart for finding neighbouring processes
-	MPI_Cart_create(MPI_COMM_WORLD, ndims, dims, periods, reorder, &cart);
-	MPI_Cart_shift(cart, 0, -1, &source1, &nbrtop);
-	MPI_Cart_shift(cart, 0, 1, &source2, &nbrbot);
+	//Variables for 3D decomposition
+	int dims3[3];
+	int periods3[3];
 
-	//Find the size of each subarray
-	decomp1d(x, size, rank, &s, &e);
+	int ndims3=3;
+	int ddims3[3];
+	ddims3[0]=ddims3[1]=ddims3[2]=0;
+
+        MPI_Comm cart;
+        ndims=1;
+        dims3[0]=size;
+        dims3[1]=size;
+	dims3[2]=size;
+        periods3[0]=1;
+        periods3[1]=1;
+	periods3[2]=2;
+        reorder=0;
+        MPI_Cart_create(MPI_COMM_WORLD, ndims, dims3, periods3, reorder, &cart);
+
+        //Find the neighbouring processes
+        MPI_Dims_create(size, ndims3, ddims3);
+
+        MPI_Cart_shift(cart, 0, -1, &source1, &nbrleft);
+        MPI_Cart_shift(cart, 0, 1, &source2, &nbrright);
+        MPI_Cart_shift(cart, 0, -ddims3[0], &source3, &nbrtop);
+        MPI_Cart_shift(cart, 0, ddims3[0], &source4, &nbrbot);
+	MPI_Cart_shift(cart, 0, ddims3[1]*ddims3[2], &source5, &nbrfront);
+	MPI_Cart_shift(cart, 0, -ddims3[1]*ddims3[2], &source6, &nbrback);
+
+
+	if(rank==0) printf("%d %d %d\n", ddims3[0], ddims3[1], ddims3[2]);
+
+	//Find correct left and right neighbours
+        if((rank%ddims3[1])==0) nbrleft = (nbrleft+ddims3[1])%size;
+        if((rank%ddims3[1])==(ddims3[1]-1)) nbrright = modulo(nbrright-ddims3[1],size);
+
+	//Find the correct top and bottom neighbours
+	int r = (rank - (rank%(ddims3[1]*ddims3[2]))); //Position along the dimension decomposition ddims3[0]
+
+	nbrtop = rank-ddims3[2];
+	nbrbot = rank+ddims3[2];
+
+	if(nbrtop < r) nbrtop = modulo(nbrtop+ddims3[1]*ddims3[2],size);
+	if(nbrbot >= (r+(ddims3[1]*ddims3[2])) ) nbrbot -= ddims3[1]*ddims3[2];
+
+	
+	
+	decomp1d(y, ddims3[1], rank%ddims3[1], &s, &e); //Decompose along y axis
+	decomp1d(z, ddims3[2], ((rank-rank%ddims3[2])/ddims3[2])%ddims3[2], &s2, &e2); //Decompose along z axis
+	decomp1d(x, ddims3[0], ((rank-rank%(ddims3[1]*ddims3[2]))/(ddims3[1]*ddims3[2])), &s3, &e3); //Decompose along x axis
+
+
+        printf("%d %d %d %d %d %d %d %d %d %d %d %d %d\n", rank, nbrleft, nbrright, nbrtop, nbrbot, nbrfront, nbrback, s, e, s2, e2, s3, e3);
 
 	//Change prng for each process 
 	unsigned long seed2 = (1999*rank);
@@ -89,14 +130,14 @@ int main(int argc, char **argv){
 		for(int j=0; j<r2; j++){
 			t=1/T;
 			for(int k=0; k<r3; k++){
-				metropolis_sweep(g,spin,s,e,J,T,gsl_mt);
-				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+				metropolis_sweep3d(g,spin,s,e,s2,e2,s3,e3,J,T,gsl_mt);
+				exchange3d(g,s,e,s2,e2,s3,e3,nbrtop,nbrbot,nbrleft,nbrright,nbrback,nbrfront,MPI_COMM_WORLD);
 			}
 			double M,E,M2,E2;
-			double M1 = magnetisation(g,s,e);
-			double E1 = energy(g,J,s,e);
-			double M22 = var_mag(g,s,e, M1);
-			double E22 = var_enrg(g,s,e,J,E1);
+			double M1 = magnetisation3d(g,s,e,s2,e2,s3,e3);
+			double E1 = energy3d(g,J,s,e,s2,e2,s3,e3);
+			double M22 = var_mag3d(g,s,e,s2,e2,s3,e3,M1);
+			double E22 = var_enrg3d(g,s,e,s2,e2,s3,e3,J,E1);
 			MPI_Reduce(&M1, &M, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&E1, &E, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 			MPI_Reduce(&M22, &M2, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -116,7 +157,7 @@ int main(int argc, char **argv){
 		T+=0.1;
 		}
 	init_grid(g,c,spin,gsl_mt);
-	//exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
+	exchange3d(g,s,e,s2,e2,s3,e3,nbrtop,nbrbot,nbrleft,nbrright,nbrback,nbrfront,MPI_COMM_WORLD);
 	}
 
 	if(rank==0){

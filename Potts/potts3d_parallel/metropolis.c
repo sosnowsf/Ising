@@ -17,7 +17,7 @@ void metropolis_sweep(int g[x][y][z], int spin, int s, int e, const double J, do
         }
 }
 
-void metropolis_sweep_2d(int g[x][y][z], int spin, int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
+void metropolis_sweep2d(int g[x][y][z], int spin, int s, int e, int s2, int e2, const double J, double T, gsl_rng *gsl_mt){
         int i,j,k,r;
         double dE;
         for(i=s; i<=e; i++){
@@ -34,7 +34,7 @@ void metropolis_sweep_2d(int g[x][y][z], int spin, int s, int e, int s2, int e2,
         }
 }
 
-void metropolis_sweep_3d(int g[x][y][z], int spin, int s, int e, int s2, int e2, int s3, int e3, const double J, double T, gsl_rng *gsl_mt){
+void metropolis_sweep3d(int g[x][y][z], int spin, int s, int e, int s2, int e2, int s3, int e3, const double J, double T, gsl_rng *gsl_mt){
         int i,j,k,r;
         double dE;
         for(i=s; i<=e; i++){
