@@ -1,6 +1,6 @@
 #include"decomp1d.h"
 #include"modulo.h"
-//#include"mpi_io.h"
+#include"mpi_io.h"
 #include"observables.h"
 #include"metropolis.h"
 #include"exchange.h"

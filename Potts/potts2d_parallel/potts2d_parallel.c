@@ -1,55 +1,16 @@
-/*#include<stdio.h>
-#include<stdlib.h>
-#include<math.h>
-#include<mpi.h>
-#include<unistd.h>
-#include<gsl/gsl_rng.h>
-#include<gsl/gsl_randist.h>
-#include"decomp1d.h"
-
-#define m 50
-#define n 50
-*/
 //#include"grid_size.h"
 #include"decomp1d.h"
 #include"exchange.h"
 #include"metropolis.h"
 #include"observables.h"
+#include"mpi_io.h"
 
 void init_grid(int g[m][n], int, int, gsl_rng *);
-/*
-void metropolis_sweep(int g[m][n], int, int, int, const double , double, gsl_rng *);
-void metropolis_sweep_triangular(int g[m][n], int, int, int, const double , double, gsl_rng *);
-void metropolis_sweep_hexagonal(int g[m][n], int, int, int, const double , double, gsl_rng *);
-*/
-/*
-double energy(int g[m][n], const double, int, int);
-double energy2(int g[m][n], const double, int, int);
-double energy_triangular(int g[m][n], const double, int, int);
-double energy_triangular2(int g[m][n], const double, int, int);
-double energy_hexagonal(int g[m][n], const double, int, int);
-double energy_hexagonal2(int g[m][n], const double, int, int);
-double magnetisation(int g[m][n], int, int);
-double magnetisation2(int g[m][n], int, int);
-*/
 void print_matrix(int g[m][n]);
-/*
-void exchange(int g[m][n], int, int, int, int, MPI_Comm);
-void exchange2(int g[m][n], int, int, int, int, int, int, MPI_Comm);
-*/
-//void gather(int g[m][n], int, int, int, int);
 void print_in_order(int g[m][n], MPI_Comm comm);
-//int modulo(int, int);
 void write_stats(char *, double *, double *, double *, double *, double *, int);
 void reset_grid(int G[m][n], int g[m][n]);
-//int delta(int, int);
-//int H(int, int);
-/*
-double var_mag(int g[m][n], int, int, double);
-double var_enrg(int g[m][n], int, int, double, double);
-double var_enrg_tri(int g[m][n], int, int, double, double);
-double var_enrg_hex(int g[m][n], int, int, double, double);
-*/
+
 int main(int argc, char **argv){
 	int rank, size, s, e, nbrtop, nbrbot;
 	int spin = 2;
@@ -159,12 +120,7 @@ int main(int argc, char **argv){
 			for(int i=0; i<2*r3; i++){
 				metropolis_sweep(g,spin,s,e,J,T,gsl_mt);
 				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-				/*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
-				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-				MPI_Barrier(MPI_COMM_WORLD);
-				if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
-				exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-				MPI_Barrier(MPI_COMM_WORLD);*/
+				
 				//if(rank%2==i%2) metropolis_sweep(g,s,e,J,T,k);
 				//exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
 			}
@@ -207,12 +163,7 @@ int main(int argc, char **argv){
                         for(int i=0; i<2*r3; i++){
                                 metropolis_sweep_triangular(g,spin,s,e,J,T,gsl_mt);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);
-                                if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);*/
+
                                 //if(rank%2==i%2) metropolis_sweep_triangular(g,s,e,J,T,k);
                                 //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
@@ -255,12 +206,7 @@ int main(int argc, char **argv){
                         for(int i=0; i<2*r3; i++){
                                 metropolis_sweep_triangular(g,spin,s,e,J,T,gsl_mt);
                                 exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                /*if(rank%2==0) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);
-                                if(rank%2==1) metropolis_sweep_triangular(g,s,e,J,T,k);
-                                exchange(g,s,e,nbrtop,nbrbot,MPI_COMM_WORLD);
-                                MPI_Barrier(MPI_COMM_WORLD);*/
+
                                 //if(rank%2==i%2) metropolis_sweep_hexagonal(g,s,e,J,T,k);
                                 //exchange2(g,s,e,nbrtop,nbrbot,rank,i,MPI_COMM_WORLD);
                         }
@@ -338,234 +284,6 @@ void init_grid(int g[m][n], int c, int s, gsl_rng *gsl_mt){
 		}
 	}
 }
-/*
-//Sweep through the lattice using the metropolis algorithm
-void metropolis_sweep(int g[m][n], int spin, int s, int e, const double J, double T, gsl_rng *gsl_mt){
-	int i,j,r;
-	double dE;
-	for(i=s; i<=e; i++){
-		for(j=0; j<n; j++){
-			//Calculate the energy difference and check if spin has to be flipped
-			r=gsl_rng_uniform_int(gsl_mt,spin)+1;
-			dE = 2.0*J*(H(r,g[modulo(i+1,m)][j]) + H(r,g[modulo(i-1,m)][j]) + H(r,g[i][modulo(j-1,n)]) + H(r,g[i][modulo(j+1,n)]));
-			if(dE<=0) g[i][j]=r;
-			else{
-				if(gsl_rng_uniform(gsl_mt)<exp(-dE/T)) g[i][j]=r;
-			}
-		}
-	}
-}
-*/
-/*
-void exchange(int g[m][n], int s, int e, int nbrtop, int nbrbot, MPI_Comm comm){
-	MPI_Request reqs[4];
-
-	MPI_Irecv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[0]);
-        MPI_Irecv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[1]);
-        MPI_Isend(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm, &reqs[2]);
-        MPI_Isend(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm, &reqs[3]);
-
-	MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
-}
-
-void exchange2(int g[m][n], int s, int e, int nbrtop, int nbrbot, int rank, int turn, MPI_Comm comm){
-	if(turn%2==0){
-		if(rank%2==0){
-			//printf("a\n");
-			MPI_Send(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm);
-			//printf("b\n");
-			MPI_Send(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm);
-		}
-		if(rank%2==1){
-			//printf("c\n");
-			MPI_Recv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrtop, 0, comm, MPI_STATUS_IGNORE);
-			//printf("d\n");
-			MPI_Recv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrbot, 0, comm, MPI_STATUS_IGNORE);
-		}
-	}
-        if(turn%2==1){
-                if(rank%2==1){
-			//printf("e\n");
-                        MPI_Send(&g[modulo(s,m)][0], n, MPI_INT, nbrtop, 0, comm);
-			//printf("f\n");
-			MPI_Send(&g[modulo(e,m)][0], n, MPI_INT, nbrbot, 0, comm);
-                }
-                if(rank%2==0){
-			//printf("g\n");
-			MPI_Recv(&g[modulo(s-1,m)][0], n, MPI_INT, nbrtop, 0, comm, MPI_STATUS_IGNORE);
-                        //printf("h\n");
-			MPI_Recv(&g[modulo(e+1,m)][0], n, MPI_INT, nbrbot, 0, comm, MPI_STATUS_IGNORE);
-                }
-        }
-}
-*/
-/*
-void metropolis_sweep_triangular(int g[m][n], int spin, int s, int e, const double J, double T, gsl_rng *gsl_mt){
-        int i,j,r;
-	double dE;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        //Calculate the energy difference and check if spin has to be flipped
-                        r=gsl_rng_uniform_int(gsl_mt,spin)+1;
-			dE = 2.0*J*(H(r,g[modulo(i+1,m)][j]) + H(r,g[modulo(i-1,m)][j]) + H(r, g[i][modulo(j+1,n)]) + H(r,g[i][modulo(j-1,n)]) + H(r,g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(r,g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]));
-                        if(dE<=0) g[i][j]=r;
-                        else{
-                                if(gsl_rng_uniform(gsl_mt)<exp(-dE/T)) g[i][j]=r;
-                        }
-                }
-        }
-}
-
-void metropolis_sweep_hexagonal(int g[m][n], int spin, int s, int e, const double J, double T, gsl_rng *gsl_mt){
-        int i,j,r;
-	double dE;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        //Calculate the energy difference and check if spin has to be flipped
-                        r=gsl_rng_uniform_int(gsl_mt,s)+1;
-			dE = 2*J*(H(r,g[modulo(i+1,m)][j]) + H(r,g[modulo(i-1,m)][j]) + H(r,g[i][modulo(j+((int)pow(-1,i+j)),n)]));
-                        if(dE<=0) g[i][j]=r;
-                        else{
-                                if(gsl_rng_uniform(gsl_mt)<exp(-dE/T)) g[i][j]=r;
-                        }
-                }
-        }
-}
-*/
-
-/*void gather(int g[m][n], int s, int e, int rank, int size){
-	int *recvptr = &(g[0][0]);
-	int recvcounts[size];
-	//recvcounts[0]=e-s+1;
-	int displs[size];
-	//displs[0]=s*n;
-	//int *recvcounts, *displs;
-	//recvcounts = (int *)malloc((e-s+1)*sizeof(int));// *sizeof(int);
-	//displs = (int *)malloc(s*n*sizeof(int));
-	//printf("%d %d %d %d\n", recvcounts[0], displs[0], e-s+1, s*n);
-	int rc = e-s+1;
-	if(rank==0){
-		
-	}
-	MPI_Gatherv(&(g[0][0]), n*(e-s+1), MPI_INT, recvptr, &recvcounts[rank], &displs[rank], MPI_INT, 0, MPI_COMM_WORLD);
-}*/
-
-/*void IO(int g[m][n], int s, int e, int rank, int size){
-	int dimx = m;
-	int dimy = n;
-	int subdimx = e-s+1;
-	int subdimy = n;
-	int sizes[2] = {dimx, dimy};
-	int starts[2];
-	
-
-}*/
-/*
-//Calculate the energy per site
-double energy(int g[m][n], const double J, int s, int e){
-	int i,j;
-	double E=0;
-	for(i=s; i<=e; i++){
-		for(j=0; j<n; j++){
-			E += -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]));
-			//E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
-		}
-	}
-return E/(2.0*(e-s+1)*n);
-}
-
-double energy2(int g[m][n], const double J, int s, int e){
-        int i,j;
-	double dE;
-        double E=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        dE = -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]));
-			E+=dE*dE;
-                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j]+g[modulo(i-1,m)][j]+g[i][modulo(j+1,n)]+g[i][modulo(j-1,n)]);
-                }
-        }
-return E/(2.0*(e-s+1)*n*(e-s+1)*n);
-}
-
-
-double energy_triangular(int g[m][n], const double J, int s, int e){
-        int i,j;
-        double E=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-			E+=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]) + H(g[i][j],g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(g[i][j],g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]));
-                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
-                }
-        }
-return E/(2.0*(e-s+1)*n);
-}
-
-double energy_triangular2(int g[m][n], const double J, int s, int e){
-        int i,j;
-	double dE;
-        double E=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        dE=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]) + H(g[i][j],g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(g[i][j],g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]));
-			E+=dE*dE;
-                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+1,n)] + g[i][modulo(j-1,n)] + g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)] +g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)]);
-                }
-        }
-return E/(2.0*(e-s+1)*n*(e-s+1)*n);
-}
-*/
-/*
-double energy_hexagonal(int g[m][n], const double J, int s, int e){
-        int i,j;
-        double E=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-			E+=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+((int)pow(-1,i+j)),n)]));
-                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
-                }
-        }
-return E/(2.0*(e-s+1)*n);
-}
-
-double energy_hexagonal2(int g[m][n], const double J, int s, int e){
-        int i,j;
-	double dE;
-        double E=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        dE=-J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+((int)pow(-1,i+j)),n)]));
-			E+=dE*dE;
-                        //E+=-J*g[i][j]*(g[modulo(i+1,m)][j] + g[modulo(i-1,m)][j] + g[i][modulo(j+((int)pow(-1,i+j)),n)]);
-                }
-        }
-return E/(2.0*(e-s+1)*n*(e-s+1)*n);
-}
-
-
-//Calculate magnetisation per site
-double magnetisation(int g[m][n], int s, int e){
-	int i,j;
-	double M=0;
-	for(i=s; i<=e; i++){
-		for(j=0; j<n; j++){
-			M+=g[i][j];
-		}
-	}
-return fabs(M/((e-s+1)*n));
-}
-
-double magnetisation2(int g[m][n], int s, int e){
-        int i,j;
-        double M=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        M+=g[i][j]*g[i][j];
-                }
-        }
-return fabs(M/((e-s+1)*n*(e-s+1)*n));
-}
-*/
 
 void print_matrix(int g[m][n]){
 	int i,j;
@@ -601,13 +319,7 @@ void print_in_order(int g[m][n], MPI_Comm comm)
     MPI_Barrier(MPI_COMM_WORLD);
   }
 }
-/*
-int modulo(int a, int b){
-	int r = a%b;
-	if(r<0) r+=b;
-return r;
-}
-*/
+
 void write_stats(char *title, double *mag, double *energy, double *specs, double *sus, double *T, int r1){
 	FILE *fp = fopen(title, "w");
 	for(int i=0; i<r1; i++){
@@ -624,67 +336,3 @@ void reset_grid(int G[m][n], int g[m][n]){
 		}
 	}
 }
-/*
-int delta(int a, int b){
-if(a==b) return 1;
-else{ return 0;}
-}
-
-int H(int a, int b){
-return 1-delta(a,b);
-}
-*/
-/*
-double var_mag(int g[m][n], int s, int e, double avg){
-        int i,j;
-        double var=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<n; j++){
-                        var += (g[i][j] - avg)*(g[i][j] - avg);
-                }
-        }
-return var/((e-s+1)*n);
-}
-
-double var_enrg(int g[m][n], int s, int e, double J, double avg){
-        int i,j;
-        double dE;
-        double var=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<m; j++){
-                        dE = -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]));
-                        dE/=2.0;
-                        var += (dE - avg)*(dE - avg);
-                }
-        }
-return var/((e-s+1)*n);
-}
-
-double var_enrg_tri(int g[m][n], int s, int e, double J, double avg){
-        int i,j;
-        double dE;
-        double var=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<m; j++){
-                        dE = -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+1,n)]) + H(g[i][j],g[i][modulo(j-1,n)]) + H(g[i][j],g[modulo(i+1,m)][modulo(j+((int)pow(-1,i)),n)]) + H(g[i][j],g[modulo(i-1,m)][modulo(j+((int)pow(-1,i)),n)])); 
-                        dE/=2.0;
-                        var += (dE - avg)*(dE - avg);
-                }
-        }
-return var/((e-s+1)*n);
-}
-
-double var_enrg_hex(int g[m][n], int s, int e, double J, double avg){
-        int i,j;
-        double dE;
-        double var=0;
-        for(i=s; i<=e; i++){
-                for(j=0; j<m; j++){
-                        dE = -J*(H(g[i][j],g[modulo(i+1,m)][j]) + H(g[i][j],g[modulo(i-1,m)][j]) + H(g[i][j],g[i][modulo(j+((int)pow(-1,i+j)),n)]));
-                        dE/=2.0;
-                        var += (dE - avg)*(dE - avg);
-                }
-        }
-return var/((e-s+1)*n);
-}
-*/
